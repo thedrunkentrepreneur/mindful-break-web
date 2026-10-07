@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.log
+referral-data.json
+detox-stats.json
+.env
+.replit-artifact/

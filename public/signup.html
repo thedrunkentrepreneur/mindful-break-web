@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Become an Affiliate — Mindful Break</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="wrap">
+    <a href="/" class="brand"><span class="dot"></span> Mindful Break Affiliates</a>
+    <div class="navlinks"><a href="/login.html">Already have an account? Log in</a></div>
+  </div>
+</nav>
+
+<div class="form-card">
+  <h2>Become an affiliate</h2>
+  <div class="form-sub">Free to join. Get your referral link the moment you sign up.</div>
+
+  <form id="signup-form">
+    <div class="field">
+      <label for="name">Full name</label>
+      <input id="name" type="text" required placeholder="Jane Doe">
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" type="email" required placeholder="you@example.com">
+      </div>
+      <div class="field">
+        <label for="phone">Phone (optional)</label>
+        <input id="phone" type="tel" placeholder="+1 555 0100">
+      </div>
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input id="password" type="password" required minlength="8" placeholder="At least 8 characters">
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label for="country">Country</label>
+        <input id="country" type="text" required placeholder="India">
+      </div>
+      <div class="field">
+        <label for="currency">Payout currency</label>
+        <select id="currency">
+          <option value="INR">INR (₹)</option>
+          <option value="USD">USD ($)</option>
+          <option value="EUR">EUR (€)</option>
+          <option value="GBP">GBP (£)</option>
+          <option value="AUD">AUD ($)</option>
+          <option value="CAD">CAD ($)</option>
+          <option value="SGD">SGD ($)</option>
+          <option value="AED">AED (د.إ)</option>
+          <option value="JPY">JPY (¥)</option>
+        </select>
+      </div>
+    </div>
+
+    <label style="display:block; font-size: 13px; font-weight: 600; margin-bottom: 10px;">Payout method</label>
+    <div class="toggle-group">
+      <div class="toggle-opt active" data-method="upi" id="toggle-upi">UPI</div>
+      <div class="toggle-opt" data-method="bank" id="toggle-bank">Bank transfer</div>
+    </div>
+
+    <div id="upi-fields">
+      <div class="field">
+        <label for="upiId">UPI ID</label>
+        <input id="upiId" type="text" placeholder="yourname@upi">
+      </div>
+    </div>
+
+    <div id="bank-fields" style="display:none;">
+      <div class="field">
+        <label for="accountName">Account holder name</label>
+        <input id="accountName" type="text" placeholder="Jane Doe">
+      </div>
+      <div class="field">
+        <label for="accountNumber">Account number</label>
+        <input id="accountNumber" type="text" placeholder="000123456789">
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label for="ifscOrSwift">IFSC / SWIFT code</label>
+          <input id="ifscOrSwift" type="text" placeholder="ABCD0123456">
+        </div>
+        <div class="field">
+          <label for="bankName">Bank name</label>
+          <input id="bankName" type="text" placeholder="Example Bank">
+        </div>
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-block" id="submit-btn">Create my affiliate account</button>
+    <div class="form-msg" id="form-msg"></div>
+  </form>
+  <div class="form-footer-link">Already have an account? <a href="/login.html">Log in</a></div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+  let payoutType = "upi";
+  const toggleUpi = document.getElementById("toggle-upi");
+  const toggleBank = document.getElementById("toggle-bank");
+  const upiFields = document.getElementById("upi-fields");
+  const bankFields = document.getElementById("bank-fields");
+
+  toggleUpi.addEventListener("click", () => {
+    payoutType = "upi";
+    toggleUpi.classList.add("active");
+    toggleBank.classList.remove("active");
+    upiFields.style.display = "";
+    bankFields.style.display = "none";
+  });
+  toggleBank.addEventListener("click", () => {
+    payoutType = "bank";
+    toggleBank.classList.add("active");
+    toggleUpi.classList.remove("active");
+    bankFields.style.display = "";
+    upiFields.style.display = "none";
+  });
+
+  document.getElementById("signup-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const msg = document.getElementById("form-msg");
+    const btn = document.getElementById("submit-btn");
+    msg.textContent = "";
+    msg.className = "form-msg";
+
+    const payoutMethod =
+      payoutType === "upi"
+        ? { type: "upi", upiId: document.getElementById("upiId").value.trim() }
+        : {
+            type: "bank",
+            accountName: document.getElementById("accountName").value.trim(),
+            accountNumber: document.getElementById("accountNumber").value.trim(),
+            ifscOrSwift: document.getElementById("ifscOrSwift").value.trim(),
+            bankName: document.getElementById("bankName").value.trim(),
+          };
+
+    btn.disabled = true;
+    btn.textContent = "Creating account...";
+    try {
+      const data = await apiFetch("/affiliate/signup", {
+        method: "POST",
+        body: JSON.stringify({
+          name: document.getElementById("name").value.trim(),
+          email: document.getElementById("email").value.trim(),
+          password: document.getElementById("password").value,
+          phone: document.getElementById("phone").value.trim(),
+          country: document.getElementById("country").value.trim(),
+          currency: document.getElementById("currency").value,
+          payoutMethod,
+        }),
+      });
+      setAuthToken(data.token);
+      msg.textContent = "Account created! Redirecting to your dashboard...";
+      msg.className = "form-msg success";
+      setTimeout(() => (window.location.href = "/dashboard.html"), 800);
+    } catch (err) {
+      msg.textContent = err.message;
+      msg.className = "form-msg error";
+      btn.disabled = false;
+      btn.textContent = "Create my affiliate account";
+    }
+  });
+</script>
+</body>
+</html>
