@@ -5,6 +5,7 @@ import {
   affiliateFromToken,
   dashboardFor,
   markPaidOut,
+  deleteAffiliate,
   type PayoutMethod,
 } from "../lib/referralStore";
 
@@ -114,6 +115,18 @@ router.post("/affiliate/:id/mark-paid", (req, res) => {
     return res.status(400).json({ error: "amountINR must be a positive number." });
   }
   const result = markPaidOut(req.params.id, amountINR);
+  if (!result.ok) return res.status(404).json({ error: "Affiliate not found." });
+  return res.json({ ok: true });
+});
+
+// Admin-only: permanently delete an affiliate account (e.g. test/duplicate
+// signups). Same shared-secret auth as mark-paid above -- see that comment.
+router.delete("/affiliate/:id", (req, res) => {
+  const adminSecret = process.env["ADMIN_SECRET"];
+  if (!adminSecret || req.headers["x-admin-secret"] !== adminSecret) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
+  const result = deleteAffiliate(req.params.id);
   if (!result.ok) return res.status(404).json({ error: "Affiliate not found." });
   return res.json({ ok: true });
 });

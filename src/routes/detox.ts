@@ -68,7 +68,7 @@ function resetDailyIfNeeded(stats: StatsData): StatsData {
 function getStripe(): Stripe | null {
   const key = process.env["STRIPE_SECRET_KEY"];
   if (!key) return null;
-  return new Stripe(key, { apiVersion: "2026-08-26.dahlia" });
+  return new Stripe(key, { apiVersion: "2026-04-22.dahlia" });
 }
 
 router.get("/detox/stats", (req, res) => {

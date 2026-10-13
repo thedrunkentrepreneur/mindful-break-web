@@ -360,3 +360,26 @@ export function markPaidOut(affiliateId: string, amountINR: number): { ok: boole
   save(data);
   return { ok: true };
 }
+
+// Admin-only: permanently remove an affiliate (and all their derived index
+// entries). Used to clean up test/duplicate accounts -- there's no self-serve
+// "delete my account" path, this is deliberately admin-gated only.
+export function deleteAffiliate(affiliateId: string): { ok: boolean; reason?: string } {
+  const data = load();
+  const affiliate = data.affiliates[affiliateId];
+  if (!affiliate) return { ok: false, reason: "not_found" };
+
+  delete data.affiliates[affiliateId];
+  delete data.codeToAffiliateId[affiliate.referralCode];
+  delete data.emailToAffiliateId[affiliate.email];
+  delete data.dailyStats[affiliateId];
+  for (const [token, session] of Object.entries(data.sessions)) {
+    if (session.affiliateId === affiliateId) delete data.sessions[token];
+  }
+  // Deliberately NOT touching data.devices: those rows record which affiliate
+  // an install was attributed to at the time, a historical fact independent
+  // of whether the affiliate account itself still exists.
+
+  save(data);
+  return { ok: true };
+}
