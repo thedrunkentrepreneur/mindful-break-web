@@ -21,7 +21,11 @@ async function apiFetch(path, options = {}) {
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const resp = await fetch(`${API_BASE}${path}`, { ...options, headers });
   const data = await resp.json().catch(() => ({}));
-  if (!resp.ok) throw new Error(data.error || `Request failed (${resp.status})`);
+  if (!resp.ok) {
+    const e = new Error(data.error || `Request failed (${resp.status})`);
+    e.reason = data.reason;
+    throw e;
+  }
   return data;
 }
 

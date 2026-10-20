@@ -12,136 +12,250 @@
 <nav class="topnav">
   <div class="wrap">
     <a href="/" class="brand"><span class="dot"></span> Mindful Break Affiliates</a>
-    <div class="navlinks"><a href="#" id="logout-link">Log out</a></div>
+    <div class="navlinks">
+      <span style="color:var(--muted); font-size:13px;" id="nav-name"></span>
+      <a href="#" id="logout-link">Log out</a>
+    </div>
   </div>
 </nav>
 
-<div class="wrap">
+<div class="dash-wrap">
+
+  <!-- Header -->
   <div class="dash-header">
     <div>
-      <h2 style="text-align:left; margin:0;">Your dashboard</h2>
-      <div style="color:var(--muted); font-size:14px; margin-top:6px;">Last 180 days of activity</div>
+      <h2 id="dash-greeting">Your dashboard</h2>
+      <div class="sub">Last 180 days · auto-refreshes every 60 seconds</div>
+    </div>
+    <div class="dash-header-right">
+      <div class="badge" id="live-badge">● Live</div>
     </div>
   </div>
 
+  <!-- Referral box -->
   <div class="referral-box">
     <div>
-      <div style="font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">Your referral code</div>
+      <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">Your referral code</div>
       <div class="referral-code" id="referral-code">—</div>
     </div>
     <div class="copy-link-box">
       <input type="text" id="referral-link" readonly>
-      <button class="btn btn-outline" id="copy-link-btn">Copy link</button>
+      <button class="btn btn-primary btn-sm" id="copy-link-btn">Copy link</button>
     </div>
   </div>
 
+  <!-- Payout banner -->
   <div id="payout-banner" class="payout-banner pending">
     <div>
-      <div style="font-weight:700;" id="payout-headline">Loading...</div>
-      <div style="font-size:13px; color:var(--muted);" id="payout-sub"></div>
+      <div style="font-weight:700; font-size:15px;" id="payout-headline">Loading…</div>
+      <div style="font-size:13px; color:var(--muted); margin-top:4px;" id="payout-sub"></div>
     </div>
     <div style="font-size:13px; color:var(--muted);">Next settlement: <strong id="next-settlement" style="color:var(--text);">—</strong></div>
   </div>
 
-  <div class="dash-grid">
-    <div class="dash-card"><div class="v" id="stat-installs">—</div><div class="l">Installs via your link</div></div>
-    <div class="dash-card"><div class="v" id="stat-sessions">—</div><div class="l">Sessions started</div></div>
-    <div class="dash-card"><div class="v" id="stat-failed">—</div><div class="l">Failed / incomplete sessions</div></div>
-    <div class="dash-card"><div class="v" id="stat-unlocks">—</div><div class="l">Paid unlocks</div></div>
+  <!-- Traffic metrics -->
+  <div class="metrics-section">
+    <div class="metrics-label">Traffic &amp; Activity</div>
+    <div class="dash-grid dash-grid-4">
+      <div class="dash-card card-blue">
+        <div class="v" id="stat-installs">—</div>
+        <div class="l">Installs via your link</div>
+      </div>
+      <div class="dash-card card-purple">
+        <div class="v" id="stat-sessions">—</div>
+        <div class="l">Sessions started</div>
+      </div>
+      <div class="dash-card card-orange">
+        <div class="v" id="stat-failed">—</div>
+        <div class="l">Failed sessions</div>
+      </div>
+      <div class="dash-card card-pink">
+        <div class="v" id="stat-unlocks">—</div>
+        <div class="l">Paid unlocks</div>
+      </div>
+    </div>
   </div>
 
-  <div class="dash-grid" style="grid-template-columns: repeat(2, 1fr);">
-    <div class="dash-card"><div class="v" style="color:var(--primary);" id="stat-earnings">—</div><div class="l">Total earnings (lifetime)</div></div>
-    <div class="dash-card"><div class="v" id="stat-pending">—</div><div class="l">Pending (not yet paid out)</div></div>
+  <!-- Earnings metrics -->
+  <div class="metrics-section">
+    <div class="metrics-label">Earnings</div>
+    <div class="dash-grid dash-grid-2">
+      <div class="dash-card card-green" style="padding: 24px 22px;">
+        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">Total lifetime earnings</div>
+        <div class="v" style="font-size:34px;" id="stat-earnings">—</div>
+        <div class="trend" style="color:var(--muted);">All time</div>
+      </div>
+      <div class="dash-card card-purple" style="padding: 24px 22px;">
+        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">Pending (not yet paid)</div>
+        <div class="v" style="font-size:34px;" id="stat-pending">—</div>
+        <div class="trend" style="color:var(--muted);">Paid out monthly</div>
+      </div>
+    </div>
   </div>
 
-  <div class="card" style="margin-bottom: 60px;">
-    <h3 style="margin-top:0;">Earnings over time</h3>
-    <canvas id="earnings-chart" height="90"></canvas>
+  <!-- Chart -->
+  <div class="chart-card">
+    <h3>Earnings over time (last 30 days)</h3>
+    <canvas id="earnings-chart" height="80"></canvas>
+  </div>
+
+</div>
+
+<!-- Floating help button -->
+<button class="help-btn" id="help-btn" title="Request help"><span>?</span></button>
+
+<!-- Help modal -->
+<div class="modal-overlay" id="help-modal">
+  <div class="modal-box" style="position:relative;">
+    <button class="modal-close" id="help-close">✕</button>
+    <h3>Request help</h3>
+    <p class="sub">Tell us what you need help with and we'll get back to you.</p>
+    <form id="help-form" novalidate>
+      <div class="field">
+        <label for="help-subject">Subject</label>
+        <select id="help-subject">
+          <option value="payout">Payout / payment issue</option>
+          <option value="tracking">Tracking / referral link issue</option>
+          <option value="login">Login or account issue</option>
+          <option value="technical">Technical issue</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="help-message">Message</label>
+        <textarea id="help-message" rows="4" placeholder="Describe your issue…" style="width:100%; padding:11px 14px; border-radius:10px; border:1.5px solid var(--border); background:#0f1620; color:var(--text); font-size:14px; resize:vertical;"></textarea>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block" id="help-submit">Send request</button>
+      <div class="form-msg" id="help-msg" style="margin-top:12px;"></div>
+    </form>
   </div>
 </div>
 
 <script src="/js/app.js"></script>
 <script>
-  requireAuthOrRedirect();
-  document.getElementById("logout-link").addEventListener("click", (e) => { e.preventDefault(); logout(); });
-  document.getElementById("copy-link-btn").addEventListener("click", () => {
-    const input = document.getElementById("referral-link");
-    input.select();
-    navigator.clipboard?.writeText(input.value);
-    const btn = document.getElementById("copy-link-btn");
-    const original = btn.textContent;
-    btn.textContent = "Copied!";
-    setTimeout(() => (btn.textContent = original), 1500);
-  });
+requireAuthOrRedirect();
+document.getElementById("logout-link").addEventListener("click", (e) => { e.preventDefault(); logout(); });
 
-  function fmtMoney(n, currency) {
-    return `${currency === "INR" ? "\u20b9" : currency + " "}${Math.round(n).toLocaleString("en-IN")}`;
+document.getElementById("copy-link-btn").addEventListener("click", () => {
+  const input = document.getElementById("referral-link");
+  input.select();
+  navigator.clipboard?.writeText(input.value).catch(() => {});
+  const btn = document.getElementById("copy-link-btn");
+  const orig = btn.textContent;
+  btn.textContent = "Copied!";
+  setTimeout(() => (btn.textContent = orig), 1500);
+});
+
+// Help modal
+const helpModal = document.getElementById("help-modal");
+document.getElementById("help-btn").addEventListener("click", () => helpModal.classList.add("open"));
+document.getElementById("help-close").addEventListener("click", () => helpModal.classList.remove("open"));
+helpModal.addEventListener("click", (e) => { if (e.target === helpModal) helpModal.classList.remove("open"); });
+
+document.getElementById("help-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById("help-msg");
+  const btn = document.getElementById("help-submit");
+  msg.textContent = "";
+  msg.className = "form-msg";
+  btn.disabled = true;
+  btn.textContent = "Sending…";
+  try {
+    await apiFetch("/affiliate/request-help", {
+      method: "POST",
+      body: JSON.stringify({
+        subject: document.getElementById("help-subject").value,
+        message: document.getElementById("help-message").value.trim(),
+      }),
+    });
+    msg.textContent = "Request sent! We'll follow up at your account email.";
+    msg.className = "form-msg success";
+    btn.textContent = "Sent ✓";
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = "form-msg error";
+    btn.disabled = false;
+    btn.textContent = "Send request";
   }
+});
 
-  (async function load() {
-    try {
-      const d = await apiFetch("/affiliate/dashboard");
+function fmtMoney(n, currency) {
+  const sym = currency === "INR" ? "₹" : (currency + " ");
+  return `${sym}${Math.round(n).toLocaleString("en-IN")}`;
+}
 
-      document.getElementById("referral-code").textContent = d.referralCode;
-      document.getElementById("referral-link").value =
-        `https://play.google.com/store/apps/details?id=com.arpitagrawal.digitaldetox&referrer=${d.referralCode}`;
+let chartInstance = null;
 
-      document.getElementById("stat-installs").textContent = d.installs.toLocaleString("en-IN");
-      document.getElementById("stat-sessions").textContent = d.sessionsStarted.toLocaleString("en-IN");
-      document.getElementById("stat-failed").textContent = d.failedSessions.toLocaleString("en-IN");
-      document.getElementById("stat-unlocks").textContent = d.paidUnlocks.toLocaleString("en-IN");
-      document.getElementById("stat-earnings").textContent = fmtMoney(d.totalEarningsINR, "INR");
-      document.getElementById("stat-pending").textContent = fmtMoney(d.pendingINR, "INR");
-      document.getElementById("next-settlement").textContent = d.nextSettlementDate;
+async function loadDashboard() {
+  try {
+    const d = await apiFetch("/affiliate/dashboard");
 
-      const banner = document.getElementById("payout-banner");
-      const headline = document.getElementById("payout-headline");
-      const sub = document.getElementById("payout-sub");
-      if (d.eligibleForPayout) {
-        banner.className = "payout-banner eligible";
-        headline.textContent = `You're eligible for payout -- ${fmtMoney(d.pendingINR, "INR")} pending`;
-        sub.textContent = `You've crossed the ${d.payoutThresholdDisplay} payout threshold. Paid out monthly, manually.`;
-      } else {
-        banner.className = "payout-banner pending";
-        const remaining = Math.max(0, 1000 - d.pendingINR);
-        headline.textContent = `${fmtMoney(d.pendingINR, "INR")} pending -- ${fmtMoney(remaining, "INR")} to go`;
-        sub.textContent = `Payout threshold is ${d.payoutThresholdDisplay}. Keep sharing your link!`;
-      }
+    document.getElementById("nav-name").textContent = d.affiliateName ?? "";
+    document.getElementById("dash-greeting").textContent = d.affiliateName ? `Hi, ${d.affiliateName.split(" ")[0]}` : "Your dashboard";
+    document.getElementById("referral-code").textContent = d.referralCode;
+    document.getElementById("referral-link").value =
+      `https://play.google.com/store/apps/details?id=com.arpitagrawal.digitaldetox&referrer=${d.referralCode}`;
 
-      const last30 = d.revenueByDay.slice(-30);
-      new Chart(document.getElementById("earnings-chart"), {
-        type: "bar",
-        data: {
-          labels: last30.map((r) => r.date.slice(5)),
-          datasets: [
-            {
-              label: "Daily commission (INR)",
-              data: last30.map((r) => r.commissionINR),
-              backgroundColor: "#00c896",
-              borderRadius: 4,
-            },
-          ],
-        },
-        options: {
-          scales: {
-            x: { ticks: { color: "#8b99ab" }, grid: { display: false } },
-            y: { ticks: { color: "#8b99ab" }, grid: { color: "#232b36" } },
-          },
-          plugins: { legend: { display: false } },
-        },
-      });
-    } catch (err) {
-      if (err.message?.toLowerCase().includes("not authenticated")) {
-        logout();
-      } else {
-        document.querySelector(".wrap").insertAdjacentHTML(
-          "afterbegin",
-          `<div class="card" style="margin-bottom:20px; border-color:var(--danger);"><p style="color:var(--danger);">Couldn't load your dashboard: ${err.message}</p></div>`
-        );
-      }
+    document.getElementById("stat-installs").textContent = d.installs.toLocaleString("en-IN");
+    document.getElementById("stat-sessions").textContent = d.sessionsStarted.toLocaleString("en-IN");
+    document.getElementById("stat-failed").textContent = d.failedSessions.toLocaleString("en-IN");
+    document.getElementById("stat-unlocks").textContent = d.paidUnlocks.toLocaleString("en-IN");
+    document.getElementById("stat-earnings").textContent = fmtMoney(d.totalEarningsINR, "INR");
+    document.getElementById("stat-pending").textContent = fmtMoney(d.pendingINR, "INR");
+    document.getElementById("next-settlement").textContent = d.nextSettlementDate;
+
+    const banner = document.getElementById("payout-banner");
+    const headline = document.getElementById("payout-headline");
+    const sub = document.getElementById("payout-sub");
+    if (d.eligibleForPayout) {
+      banner.className = "payout-banner eligible";
+      headline.textContent = `You're eligible for payout — ${fmtMoney(d.pendingINR, "INR")} pending`;
+      sub.textContent = `You've crossed the ${d.payoutThresholdDisplay} payout threshold. Paid out monthly, manually.`;
+    } else {
+      banner.className = "payout-banner pending";
+      const remaining = Math.max(0, 1000 - d.pendingINR);
+      headline.textContent = `${fmtMoney(d.pendingINR, "INR")} pending — ${fmtMoney(remaining, "INR")} to reach payout threshold`;
+      sub.textContent = `Minimum payout: ${d.payoutThresholdDisplay}. Keep sharing your link!`;
     }
-  })();
+
+    const last30 = d.revenueByDay.slice(-30);
+    if (chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(document.getElementById("earnings-chart"), {
+      type: "bar",
+      data: {
+        labels: last30.map((r) => r.date.slice(5)),
+        datasets: [{
+          label: "Daily commission (₹)",
+          data: last30.map((r) => r.commissionINR),
+          backgroundColor: "rgba(0,217,166,0.7)",
+          borderRadius: 5,
+          hoverBackgroundColor: "#00d9a6",
+        }],
+      },
+      options: {
+        responsive: true,
+        scales: {
+          x: { ticks: { color: "#7a8fa3", font: { size: 11 } }, grid: { display: false } },
+          y: { ticks: { color: "#7a8fa3", font: { size: 11 } }, grid: { color: "#1e2a38" }, beginAtZero: true },
+        },
+        plugins: { legend: { display: false } },
+      },
+    });
+  } catch (err) {
+    if (err.message?.toLowerCase().includes("not authenticated")) {
+      logout();
+    } else {
+      document.querySelector(".dash-wrap").insertAdjacentHTML(
+        "afterbegin",
+        `<div class="card" style="margin-bottom:20px; border-color:var(--danger);"><p style="color:var(--danger);">Couldn't load dashboard: ${err.message}</p></div>`
+      );
+    }
+  }
+}
+
+loadDashboard();
+// Auto-refresh every 60 seconds
+setInterval(loadDashboard, 60000);
 </script>
 </body>
 </html>

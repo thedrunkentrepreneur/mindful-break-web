@@ -15,52 +15,91 @@
   </div>
 </nav>
 
+<div class="form-page">
 <div class="form-card">
   <h2>Welcome back</h2>
   <div class="form-sub">Log in to see your referral stats and earnings.</div>
 
-  <form id="login-form">
+  <form id="login-form" novalidate>
     <div class="field">
       <label for="email">Email</label>
-      <input id="email" type="email" required placeholder="you@example.com">
+      <input id="email" type="email" required placeholder="you@example.com" autocomplete="email">
     </div>
     <div class="field">
       <label for="password">Password</label>
-      <input id="password" type="password" required placeholder="Your password">
+      <input id="password" type="password" required placeholder="Your password" autocomplete="current-password">
     </div>
+    <a href="/forgot-password.html" class="forgot-link">Forgot password?</a>
     <button type="submit" class="btn btn-primary btn-block" id="submit-btn">Log in</button>
     <div class="form-msg" id="form-msg"></div>
+    <button type="button" class="btn btn-block" id="resend-btn" style="display:none;margin-top:8px;">Resend verification email</button>
   </form>
   <div class="form-footer-link">New here? <a href="/signup.html">Become an affiliate</a></div>
+</div>
 </div>
 
 <script src="/js/app.js"></script>
 <script>
-  document.getElementById("login-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const msg = document.getElementById("form-msg");
-    const btn = document.getElementById("submit-btn");
-    msg.textContent = "";
-    msg.className = "form-msg";
-    btn.disabled = true;
-    btn.textContent = "Logging in...";
-    try {
-      const data = await apiFetch("/affiliate/login", {
-        method: "POST",
-        body: JSON.stringify({
-          email: document.getElementById("email").value.trim(),
-          password: document.getElementById("password").value,
-        }),
-      });
-      setAuthToken(data.token);
-      window.location.href = "/dashboard.html";
-    } catch (err) {
-      msg.textContent = err.message;
-      msg.className = "form-msg error";
-      btn.disabled = false;
-      btn.textContent = "Log in";
+// Show email-verified success message if redirected from verify-email flow
+const urlP = new URLSearchParams(window.location.search);
+if (urlP.get("verified") === "1") {
+  const msg = document.getElementById("form-msg");
+  msg.textContent = "Email verified! You can now log in.";
+  msg.className = "form-msg success";
+}
+
+document.getElementById("login-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById("form-msg");
+  const btn = document.getElementById("submit-btn");
+  msg.textContent = "";
+  msg.className = "form-msg";
+  btn.disabled = true;
+  btn.textContent = "Logging in…";
+  try {
+    const data = await apiFetch("/affiliate/login", {
+      method: "POST",
+      body: JSON.stringify({
+        email: document.getElementById("email").value.trim(),
+        password: document.getElementById("password").value,
+      }),
+    });
+    setAuthToken(data.token);
+    window.location.href = "/dashboard.html";
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = "form-msg error";
+    btn.disabled = false;
+    btn.textContent = "Log in";
+    if (err.reason === "unverified") {
+      document.getElementById("resend-btn").style.display = "";
     }
-  });
+  }
+});
+
+document.getElementById("resend-btn").addEventListener("click", async () => {
+  const msg = document.getElementById("form-msg");
+  const resendBtn = document.getElementById("resend-btn");
+  const email = document.getElementById("email").value.trim();
+  if (!email) { msg.textContent = "Enter your email above first."; msg.className = "form-msg error"; return; }
+  resendBtn.disabled = true;
+  resendBtn.textContent = "Sending...";
+  try {
+    const data = await apiFetch("/affiliate/resend-verification", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+    msg.textContent = data.message || "If that email has an unverified account, a new link has been sent.";
+    msg.className = "form-msg success";
+    resendBtn.style.display = "none";
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = "form-msg error";
+  } finally {
+    resendBtn.disabled = false;
+    resendBtn.textContent = "Resend verification email";
+  }
+});
 </script>
 </body>
 </html>

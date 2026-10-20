@@ -58,12 +58,19 @@ export interface Affiliate {
   phone: string;
   country: string;
   currency: string; // ISO code, e.g. "INR", "USD"
+  promotionChannel: string;
   payoutMethod: PayoutMethod;
   referralCode: string;
   createdAt: string;
   totalEarningsINR: number; // lifetime, never decreases
   paidOutINR: number; // lifetime, incremented only by an admin mark-paid action
   lastSettlementAt: string | null;
+  // Email verification (requires RESEND_API_KEY env var to send the link)
+  emailVerified: boolean;
+  emailVerificationToken: string | null;
+  // Password reset (token is a 1-hour-expiry hex string, cleared after use)
+  passwordResetToken: string | null;
+  passwordResetExpiry: number | null; // ms timestamp
 }
 
 export interface DailyBucket {
@@ -78,18 +85,22 @@ interface StoreData {
   affiliates: Record<string, Affiliate>;
   codeToAffiliateId: Record<string, string>;
   emailToAffiliateId: Record<string, string>;
+  phoneToAffiliateId: Record<string, string>; // normalized phone -> affiliateId dedup index
   devices: Record<string, { affiliateId: string; referralCode: string; source: string; attributedAt: string }>;
   dailyStats: Record<string, Record<string, DailyBucket>>; // affiliateId -> dateISO -> bucket
   sessions: Record<string, { affiliateId: string; createdAt: string }>; // auth token -> session
+  helpRequests: Array<{ affiliateId: string; subject: string; message: string; createdAt: string }>;
 }
 
 const EMPTY: StoreData = {
   affiliates: {},
   codeToAffiliateId: {},
   emailToAffiliateId: {},
+  phoneToAffiliateId: {},
   devices: {},
   dailyStats: {},
   sessions: {},
+  helpRequests: [],
 };
 
 function load(): StoreData {
@@ -152,8 +163,9 @@ export function createAffiliate(input: {
   phone: string;
   country: string;
   currency: string;
+  promotionChannel?: string;
   payoutMethod: PayoutMethod;
-}): { affiliate: Affiliate } | { error: string } {
+}): { affiliate: Affiliate; verificationToken: string } | { error: string } {
   const email = input.email.trim().toLowerCase();
   if (!email || !input.password || input.password.length < 8) {
     return { error: "Email and a password of at least 8 characters are required." };
@@ -162,10 +174,16 @@ export function createAffiliate(input: {
   if (data.emailToAffiliateId[email]) {
     return { error: "An affiliate account with this email already exists." };
   }
+  // Deduplicate by normalized phone (non-empty phones only)
+  const normalizedPhone = (input.phone ?? "").replace(/\s/g, "").trim();
+  if (normalizedPhone && data.phoneToAffiliateId?.[normalizedPhone]) {
+    return { error: "An affiliate account with this phone number already exists." };
+  }
 
   const { hash, salt } = hashPassword(input.password);
   const id = crypto.randomUUID();
   const referralCode = generateReferralCode(data, input.name);
+  const verificationToken = crypto.randomBytes(32).toString("hex");
 
   const affiliate: Affiliate = {
     id,
@@ -173,36 +191,124 @@ export function createAffiliate(input: {
     email,
     passwordHash: hash,
     passwordSalt: salt,
-    phone: input.phone?.trim() ?? "",
+    phone: normalizedPhone,
     country: input.country?.trim() ?? "",
     currency: (input.currency || "USD").toUpperCase(),
+    promotionChannel: input.promotionChannel?.trim() ?? "",
     payoutMethod: input.payoutMethod,
     referralCode,
     createdAt: new Date().toISOString(),
     totalEarningsINR: 0,
     paidOutINR: 0,
     lastSettlementAt: null,
+    emailVerified: false,
+    emailVerificationToken: verificationToken,
+    passwordResetToken: null,
+    passwordResetExpiry: null,
   };
 
   data.affiliates[id] = affiliate;
   data.codeToAffiliateId[referralCode] = id;
   data.emailToAffiliateId[email] = id;
+  if (normalizedPhone) {
+    if (!data.phoneToAffiliateId) data.phoneToAffiliateId = {};
+    data.phoneToAffiliateId[normalizedPhone] = id;
+  }
   save(data);
 
-  return { affiliate };
+  return { affiliate, verificationToken };
 }
 
-export function loginAffiliate(email: string, password: string): { token: string; affiliate: Affiliate } | { error: string } {
+// Verify email using the token sent at signup.
+export function verifyEmail(token: string): { ok: boolean; error?: string } {
+  const data = load();
+  const affiliate = Object.values(data.affiliates).find((a) => a.emailVerificationToken === token);
+  if (!affiliate) return { ok: false, error: "Invalid or expired verification link." };
+  affiliate.emailVerified = true;
+  affiliate.emailVerificationToken = null;
+  save(data);
+  return { ok: true };
+}
+
+// Issue a 1-hour password reset token.
+export function createPasswordResetToken(email: string): { token: string; affiliate: Affiliate } | { error: string } {
+  const data = load();
+  const id = data.emailToAffiliateId[email.trim().toLowerCase()];
+  const affiliate = id ? data.affiliates[id] : undefined;
+  if (!affiliate) {
+    // Return a vague success-like message to prevent email enumeration.
+    return { error: "not_found" };
+  }
+  const token = crypto.randomBytes(32).toString("hex");
+  affiliate.passwordResetToken = token;
+  affiliate.passwordResetExpiry = Date.now() + 60 * 60 * 1000; // 1 hour
+  save(data);
+  return { token, affiliate };
+}
+
+// Consume the reset token and set a new password.
+export function resetPassword(token: string, newPassword: string): { ok: boolean; error?: string } {
+  if (!newPassword || newPassword.length < 8) return { ok: false, error: "Password must be at least 8 characters." };
+  const data = load();
+  const affiliate = Object.values(data.affiliates).find(
+    (a) => a.passwordResetToken === token && a.passwordResetExpiry && a.passwordResetExpiry > Date.now()
+  );
+  if (!affiliate) return { ok: false, error: "This reset link has expired or is invalid. Please request a new one." };
+  const { hash, salt } = hashPassword(newPassword);
+  affiliate.passwordHash = hash;
+  affiliate.passwordSalt = salt;
+  affiliate.passwordResetToken = null;
+  affiliate.passwordResetExpiry = null;
+  save(data);
+  return { ok: true };
+}
+
+// Log a help request from an affiliate.
+export function logHelpRequest(affiliateId: string, subject: string, message: string): { ok: boolean } {
+  const data = load();
+  if (!data.helpRequests) data.helpRequests = [];
+  data.helpRequests.push({ affiliateId, subject, message, createdAt: new Date().toISOString() });
+  save(data);
+  return { ok: true };
+}
+
+export function loginAffiliate(
+  email: string,
+  password: string
+): { token: string; affiliate: Affiliate } | { error: string; reason?: "unverified" } {
   const data = load();
   const id = data.emailToAffiliateId[email.trim().toLowerCase()];
   const affiliate = id ? data.affiliates[id] : undefined;
   if (!affiliate || !verifyPassword(password, affiliate.passwordHash, affiliate.passwordSalt)) {
     return { error: "Invalid email or password." };
   }
+  // Hard gate: email must be verified before a session token is issued.
+  // The password check above already ran, so this only blocks real account
+  // owners who haven't clicked their verification link yet -- not a way to
+  // probe which emails exist.
+  if (!affiliate.emailVerified) {
+    return { error: "Please verify your email before logging in. Check your inbox, or resend the link.", reason: "unverified" };
+  }
   const token = crypto.randomBytes(32).toString("hex");
   data.sessions[token] = { affiliateId: affiliate.id, createdAt: new Date().toISOString() };
   save(data);
   return { token, affiliate };
+}
+
+// Re-issue a verification token for an affiliate who hasn't verified yet
+// (e.g. they lost the original email or it expired/landed in spam).
+// Always returns the same vague shape regardless of whether the email
+// exists, to avoid leaking account existence.
+export function resendVerification(email: string): { affiliate: Affiliate; token: string } | { error: string } {
+  const data = load();
+  const id = data.emailToAffiliateId[email.trim().toLowerCase()];
+  const affiliate = id ? data.affiliates[id] : undefined;
+  if (!affiliate) return { error: "not_found" };
+  if (affiliate.emailVerified) return { error: "already_verified" };
+  const token = affiliate.emailVerificationToken ?? crypto.randomBytes(32).toString("hex");
+  affiliate.emailVerificationToken = token;
+  save(data);
+  return { affiliate, token };
 }
 
 export function affiliateFromToken(token: string | undefined | null): Affiliate | null {
@@ -329,6 +435,7 @@ export function dashboardFor(affiliateId: string, days = 180) {
   const nextSettlement = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 
   return {
+    affiliateName: affiliate.name,
     referralCode: affiliate.referralCode,
     currency: affiliate.currency,
     installs: totals.installs,
@@ -372,6 +479,7 @@ export function deleteAffiliate(affiliateId: string): { ok: boolean; reason?: st
   delete data.affiliates[affiliateId];
   delete data.codeToAffiliateId[affiliate.referralCode];
   delete data.emailToAffiliateId[affiliate.email];
+  if (affiliate.phone && data.phoneToAffiliateId) delete data.phoneToAffiliateId[affiliate.phone];
   delete data.dailyStats[affiliateId];
   for (const [token, session] of Object.entries(data.sessions)) {
     if (session.affiliateId === affiliateId) delete data.sessions[token];
