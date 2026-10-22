@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Verify Email — Mindful Break Affiliates</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="wrap">
+    <a href="/" class="brand"><span class="dot"></span> Mindful Break Affiliates</a>
+    <div class="navlinks"><a href="/login.html">Back to login</a></div>
+  </div>
+</nav>
+
+<div class="form-page">
+<div class="form-card">
+  <h2 id="title">Verifying your email…</h2>
+  <div class="form-sub" id="sub">Hang on a second.</div>
+  <div class="form-msg" id="msg"></div>
+  <div class="form-footer-link"><a href="/login.html">Back to login</a></div>
+</div>
+</div>
+
+<script>
+const token = new URLSearchParams(window.location.search).get("token");
+const title = document.getElementById("title");
+const sub = document.getElementById("sub");
+const msg = document.getElementById("msg");
+
+async function run() {
+  if (!token) {
+    title.textContent = "Missing verification link";
+    sub.textContent = "";
+    msg.textContent = "This link is missing its verification token. Copy the full link from your email, or request a new one from the login page.";
+    msg.className = "form-msg error";
+    return;
+  }
+
+  try {
+    // The actual verification happens server-side at this API route, which
+    // redirects to /login.html?verified=1 on success -- fetch follows that
+    // redirect itself, so we just check where it landed.
+    const resp = await fetch(`/api/affiliate/verify-email?token=${encodeURIComponent(token)}`, {
+      redirect: "follow",
+    });
+
+    if (resp.ok && resp.url.includes("verified=1")) {
+      window.location.href = resp.url;
+      return;
+    }
+
+    const data = await resp.json().catch(() => ({}));
+    title.textContent = "Couldn't verify this link";
+    sub.textContent = "";
+    msg.textContent = data.error || "This link is invalid or has expired. Request a new verification email from the login page.";
+    msg.className = "form-msg error";
+  } catch {
+    title.textContent = "Couldn't verify this link";
+    sub.textContent = "";
+    msg.textContent = "Couldn't reach the server. Check your connection and try again.";
+    msg.className = "form-msg error";
+  }
+}
+
+run();
+</script>
+</body>
+</html>
