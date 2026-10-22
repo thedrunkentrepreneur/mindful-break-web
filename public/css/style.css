@@ -123,6 +123,8 @@ h1 .gradient { background: linear-gradient(135deg, var(--primary) 0%, var(--acce
 .icon-box-green { background: rgba(0,217,166,0.15); color: var(--primary); }
 .icon-box-purple { background: rgba(0,229,176,0.15); color: var(--accent); }
 .icon-box-orange { background: rgba(255,140,66,0.15); color: var(--orange); }
+.icon-box-blue { background: rgba(61,156,245,0.15); color: var(--blue); }
+.grid4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 20px; }
 
 /* ─── STEP CARDS ─── */
 .step-card { position: relative; padding-left: 60px; }
@@ -277,6 +279,7 @@ table.calc-table td.money { color: var(--primary); font-weight: 700; }
 @media (max-width: 860px) {
   h1 { font-size: 36px; }
   .grid3, .grid2 { grid-template-columns: 1fr; }
+  .grid4 { grid-template-columns: repeat(2,1fr); }
   .calc-stats { grid-template-columns: repeat(2,1fr); }
   .dash-grid-4 { grid-template-columns: repeat(2,1fr); }
   .dash-grid-2 { grid-template-columns: 1fr 1fr; }
@@ -288,6 +291,7 @@ table.calc-table td.money { color: var(--primary); font-weight: 700; }
 @media (max-width: 500px) {
   .phone-row { grid-template-columns: 110px 1fr; }
   .dash-grid-2 { grid-template-columns: 1fr; }
+  .grid4 { grid-template-columns: 1fr; }
 }
 
 /* ─── GROWTH NOTE (calculator) ─── */
@@ -308,9 +312,26 @@ table.calc-table td.money { color: var(--primary); font-weight: 700; }
   box-shadow: 0 12px 32px rgba(10,14,26,0.18); max-width: 180px; margin: 0 auto;
 }
 .phone-frame img { width: 100%; display: block; border-radius: 18px; background: var(--bg); }
-.play-cta { text-align: center; margin-top: 8px; }
+.play-cta { text-align: center; margin: 8px 0 44px; }
 .btn-lg { padding: 15px 32px; font-size: 16px; }
 .play-icon { font-size: 13px; }
+.play-badge-link { display: inline-block; transition: transform 0.15s; }
+.play-badge-link:hover { transform: scale(1.04); }
+.play-badge-img { height: 56px; display: block; }
+
+/* LIFETIME COMMISSION HIGHLIGHT */
+.lifetime-highlight {
+  background: linear-gradient(135deg, rgba(0,217,166,0.12), rgba(0,229,176,0.12));
+  border: 1px solid rgba(0,217,166,0.3); border-radius: 18px;
+  padding: 20px 28px; margin: 28px auto 0; max-width: 640px;
+  display: flex; align-items: center; gap: 16px; text-align: left;
+}
+.lifetime-highlight .emoji { font-size: 32px; line-height: 1; flex-shrink: 0; }
+.lifetime-highlight strong { color: var(--primary-dark); display: block; font-size: 16px; margin-bottom: 4px; }
+.lifetime-highlight .desc { color: var(--text); font-size: 14px; line-height: 1.5; }
+@media (max-width: 500px) {
+  .lifetime-highlight { flex-direction: column; text-align: center; }
+}
 
 @media (max-width: 860px) {
   .app-shots { grid-template-columns: repeat(3, 1fr); }
