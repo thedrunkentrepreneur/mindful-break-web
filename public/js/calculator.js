@@ -7,16 +7,19 @@
 //   commission/unlock = INR 20.80  (50% of INR 49 unlock fee net of Google
 //                        Play's 15% billing cut)
 //
-// This is deliberately an ILLUSTRATIVE model, not a promise -- the growth
-// curve (new followers added per month, decaying ~70% each month) is a
-// simple, editable assumption, not a guarantee. All inputs below are meant
-// to be played with.
+// Growth model (simplified per product owner, 10-22): flat net 10% audience
+// growth every month, compounding for up to 12 months. This assumes the
+// affiliate keeps posting about Digitox -- at least 1 post per month -- to
+// sustain that growth; it is NOT guaranteed, just a simple illustrative
+// assumption. The only input left to the user is their starting audience.
 const VIEWS_PER_FOLLOWER = 5;
 const INSTALL_CONVERSION = 0.01;
 const ACTIVE_USER_RATE = 0.6;
 const SESSIONS_PER_ACTIVE_USER = 20;
 const PAID_UNLOCK_RATE = 0.15;
 const COMMISSION_PER_UNLOCK_INR = 20.8;
+const MONTHLY_GROWTH_RATE = 0.1; // flat net 10%/month, every month
+const PROJECTION_MONTHS = 12;
 
 // Net INR earned per follower per month, holding the follower count fixed
 // for that month (the per-month breakdown below re-derives this fresh off
@@ -30,12 +33,9 @@ function monthlyEarningsINR(followers) {
   return paidUnlocks * COMMISSION_PER_UNLOCK_INR;
 }
 
-function buildProjection(startFollowers, growthRatePct, decayPct, months) {
-  const growth = growthRatePct / 100;
-  const decay = decayPct / 100;
+function buildProjection(startFollowers, months) {
   const rows = [];
   let followers = startFollowers;
-  let newAdd = startFollowers * growth;
   let cumulativeINR = 0;
 
   for (let m = 1; m <= months; m++) {
@@ -47,8 +47,7 @@ function buildProjection(startFollowers, growthRatePct, decayPct, months) {
       earningsINR: earnings,
       cumulativeINR,
     });
-    followers += newAdd;
-    newAdd *= decay;
+    followers *= 1 + MONTHLY_GROWTH_RATE;
   }
   return rows;
 }
@@ -62,24 +61,16 @@ function fmtNum(n) {
 
 function renderCalculator() {
   const followersSlider = document.getElementById("calc-followers");
-  const growthSlider = document.getElementById("calc-growth");
-  const decaySlider = document.getElementById("calc-decay");
   const followersLabel = document.getElementById("calc-followers-label");
-  const growthLabel = document.getElementById("calc-growth-label");
-  const decayLabel = document.getElementById("calc-decay-label");
   const statsEl = document.getElementById("calc-month1-stats");
   const tbody = document.getElementById("calc-table-body");
   const cumulativeEl = document.getElementById("calc-cumulative-value");
 
   function render() {
     const followers = Number(followersSlider.value);
-    const growthPct = Number(growthSlider.value);
-    const decayPct = Number(decaySlider.value);
     followersLabel.textContent = fmtNum(followers);
-    growthLabel.textContent = growthPct + "%";
-    decayLabel.textContent = decayPct + "%";
 
-    const rows = buildProjection(followers, growthPct, decayPct, 12);
+    const rows = buildProjection(followers, PROJECTION_MONTHS);
     const month1 = rows[0];
 
     const views = month1.followers * VIEWS_PER_FOLLOWER;
@@ -96,7 +87,6 @@ function renderCalculator() {
     `;
 
     tbody.innerHTML = rows
-      .slice(0, 6)
       .map(
         (r) => `
       <tr>
@@ -107,10 +97,10 @@ function renderCalculator() {
       )
       .join("");
 
-    cumulativeEl.textContent = fmtINR(rows[11].cumulativeINR);
+    cumulativeEl.textContent = fmtINR(rows[PROJECTION_MONTHS - 1].cumulativeINR);
   }
 
-  [followersSlider, growthSlider, decaySlider].forEach((el) => el.addEventListener("input", render));
+  followersSlider.addEventListener("input", render);
   render();
 }
 

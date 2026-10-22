@@ -62,6 +62,49 @@
   </div>
 </section>
 
+<!-- ABOUT THE APP -->
+<section id="what-is-digitox">
+  <div class="wrap">
+    <div class="section-label">About the app</div>
+    <h2>What is Digitox?</h2>
+    <p class="section-sub">Digitox locks an Android phone to one screen for a set time, so you can't get distracted. Here's the actual app, screen by screen.</p>
+
+    <div class="app-shots">
+      <div class="app-shot">
+        <div class="phone-frame"><img src="/images/app-home.jpeg" alt="Digitox home screen showing how it works and the Start Detox button"></div>
+        <h4>1. Open the app</h4>
+        <p>A quick 3-step explainer, then tap Start Detox -- or apply a referral code first.</p>
+      </div>
+      <div class="app-shot">
+        <div class="phone-frame"><img src="/images/app-start.jpeg" alt="Digitox begin your detox screen with purpose and duration picker"></div>
+        <h4>2. Set your intention</h4>
+        <p>Pick a purpose (Deep Work, Study, Sleep...) and a duration from 15 minutes to 8 hours.</p>
+      </div>
+      <div class="app-shot">
+        <div class="phone-frame"><img src="/images/app-locked.jpeg" alt="Digitox locked session screen with countdown timer"></div>
+        <h4>3. Phone locks itself</h4>
+        <p>Screen pinning kicks in. No notifications, no app-switching, just the countdown -- until time's up.</p>
+      </div>
+      <div class="app-shot">
+        <div class="phone-frame"><img src="/images/app-unlock.jpeg" alt="Digitox pay to end detox early screen"></div>
+        <h4>4. Real money, real stakes</h4>
+        <p>Leaving early means paying to unlock -- in real currency, via Google Play. That's what makes it work.</p>
+      </div>
+      <div class="app-shot">
+        <div class="phone-frame"><img src="/images/app-stats.jpeg" alt="Digitox progress and stats screen with streaks and session history"></div>
+        <h4>5. Track your progress</h4>
+        <p>Streaks, minutes saved, success rate, and a 7-day session history -- all on-device.</p>
+      </div>
+    </div>
+
+    <div class="play-cta">
+      <a href="https://play.google.com/store/apps/details?id=com.arpitagrawal.digitaldetox&hl=en_IN" class="btn btn-primary btn-lg" target="_blank" rel="noopener">
+        <span class="play-icon">&#9658;</span> Get Digitox on Google Play
+      </a>
+    </div>
+  </div>
+</section>
+
 <!-- HOW IT WORKS -->
 <section id="how-it-works" style="background: var(--bg-soft);">
   <div class="wrap">
@@ -100,18 +143,12 @@
         <div class="calc-followers" id="calc-followers-label">10,000</div>
       </div>
       <input type="range" id="calc-followers" min="1000" max="500000" step="1000" value="10000">
-      <div class="row2" style="margin-bottom: 10px;">
-        <div>
-          <div class="calc-top"><label for="calc-growth">Month-1 audience growth</label><div id="calc-growth-label" style="color:var(--muted); font-weight:700;">10%</div></div>
-          <input type="range" id="calc-growth" min="0" max="30" step="1" value="10">
-        </div>
-        <div>
-          <div class="calc-top"><label for="calc-decay">Growth decay each month</label><div id="calc-decay-label" style="color:var(--muted); font-weight:700;">70%</div></div>
-          <input type="range" id="calc-decay" min="30" max="95" step="5" value="70">
-        </div>
+      <div class="growth-note">
+        <strong>Assumption:</strong> a flat 10% net audience growth every month, for 12 months &mdash;
+        which assumes you keep posting about Digitox at least <strong>1 post per month</strong>.
       </div>
       <div class="calc-stats" id="calc-month1-stats"></div>
-      <h3 style="margin:28px 0 12px; font-size:15px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Month-by-month earnings (first 6 months)</h3>
+      <h3 style="margin:28px 0 12px; font-size:15px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Month-by-month earnings (12 months)</h3>
       <table class="calc-table">
         <thead><tr><th>Month</th><th>Audience</th><th>Est. earnings</th></tr></thead>
         <tbody id="calc-table-body"></tbody>
@@ -123,7 +160,7 @@
         </div>
         <a href="/signup.html" class="btn btn-primary">Claim your referral link</a>
       </div>
-      <p class="disclaimer">Model: views = followers × 5, installs = 1% of views, 60% of installs become active users, 20 sessions/active user/month, 15% of sessions end in a paid unlock, and you earn ₹20.80 per paid unlock (50% of the ₹49 unlock fee, net of Google Play's billing cut). Audience growth assumes a declining month-over-month addition, purely for illustration.</p>
+      <p class="disclaimer">Model: views = followers × 5, installs = 1% of views, 60% of installs become active users, 20 sessions/active user/month, 15% of sessions end in a paid unlock, and you earn ₹20.80 per paid unlock (50% of the ₹49 unlock fee, net of Google Play's billing cut). Audience growth assumes a flat net 10% increase every month for 12 months, which in turn assumes you post about Digitox at least once a month. Illustrative only, not a guarantee.</p>
     </div>
   </div>
 </section>
