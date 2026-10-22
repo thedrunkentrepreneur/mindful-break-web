@@ -319,6 +319,20 @@ export function affiliateFromToken(token: string | undefined | null): Affiliate 
   return data.affiliates[session.affiliateId] ?? null;
 }
 
+// Looks up whether a persistent device ID (Android ID, see the app's
+// lib/referral.ts) already has an attribution on file from ANY prior
+// install -- this is what lets a user who deletes and reinstalls Digitox
+// stay tied to the same affiliate for life, per Arpit's explicit product
+// requirement, without needing to re-click a link or retype a code.
+// Deliberately read-only: does not touch installs/dailyStats counters, this
+// is just recovering a fact that was already recorded once.
+export function lookupAttribution(deviceId: string): { referralCode: string; source: string } | null {
+  const data = load();
+  const device = data.devices[deviceId];
+  if (!device) return null;
+  return { referralCode: device.referralCode, source: device.source };
+}
+
 export function affiliateByCode(code: string): Affiliate | null {
   const data = load();
   const id = data.codeToAffiliateId[code];
