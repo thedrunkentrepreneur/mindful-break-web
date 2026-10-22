@@ -14,6 +14,7 @@
     <a href="/" class="brand"><span class="dot"></span> Mindful Break Affiliates</a>
     <div class="navlinks">
       <span style="color:var(--muted); font-size:13px;" id="nav-name"></span>
+      <a href="mailto:digitox007@gmail.com?subject=Affiliate%20support%20request" class="btn btn-outline btn-sm">Contact Admin</a>
       <a href="#" id="logout-link">Log out</a>
     </div>
   </div>
@@ -93,6 +94,23 @@
     </div>
   </div>
 
+  <!-- Last payment -->
+  <div class="metrics-section">
+    <div class="metrics-label">Payout History</div>
+    <div class="dash-grid dash-grid-2">
+      <div class="dash-card card-blue" style="padding: 24px 22px;">
+        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">Last payment made</div>
+        <div class="v" style="font-size:22px;" id="stat-last-payment">No payments yet</div>
+        <div class="trend" style="color:var(--muted);" id="stat-last-payment-date"></div>
+      </div>
+      <div class="dash-card card-green" style="padding: 24px 22px;">
+        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">Total paid out (lifetime)</div>
+        <div class="v" style="font-size:22px;" id="stat-paid-out-lifetime">—</div>
+        <div class="trend" style="color:var(--muted);">Manually transferred by Digitox</div>
+      </div>
+    </div>
+  </div>
+
   <!-- Chart -->
   <div class="chart-card">
     <h3>Earnings over time (last 30 days)</h3>
@@ -100,6 +118,11 @@
   </div>
 
 </div>
+
+<footer class="footer">
+  <p>In case of any dispute or issue regarding the affiliate program, the Digitox management team's decision will be final.</p>
+  <p><a href="mailto:digitox007@gmail.com">digitox007@gmail.com</a></p>
+</footer>
 
 <!-- Floating help button -->
 <button class="help-btn" id="help-btn" title="Request help"><span>?</span></button>
@@ -203,6 +226,14 @@ async function loadDashboard() {
     document.getElementById("stat-earnings").textContent = fmtMoney(d.totalEarningsINR, "INR");
     document.getElementById("stat-pending").textContent = fmtMoney(d.pendingINR, "INR");
     document.getElementById("next-settlement").textContent = d.nextSettlementDate;
+    document.getElementById("stat-paid-out-lifetime").textContent = fmtMoney(d.paidOutINR, "INR");
+    if (d.lastPayout) {
+      document.getElementById("stat-last-payment").textContent = fmtMoney(d.lastPayout.amountINR, "INR");
+      document.getElementById("stat-last-payment-date").textContent = `Paid on ${d.lastPayout.paidAt}${d.lastPayout.note ? " · " + d.lastPayout.note : ""}`;
+    } else {
+      document.getElementById("stat-last-payment").textContent = "No payments yet";
+      document.getElementById("stat-last-payment-date").textContent = "";
+    }
 
     const banner = document.getElementById("payout-banner");
     const headline = document.getElementById("payout-headline");

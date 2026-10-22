@@ -142,6 +142,12 @@
         <option value="Other">Other</option>
       </select>
     </div>
+    <div class="field">
+      <label for="social-link-1">Where will you be promoting the app? <span style="color:#888; font-weight:400;">(up to 3 links -- Instagram, Facebook, YouTube, etc.)</span></label>
+      <input id="social-link-1" type="text" placeholder="e.g. https://instagram.com/yourhandle" autocomplete="off" style="margin-bottom:8px;">
+      <input id="social-link-2" type="text" placeholder="Another link (optional)" autocomplete="off" style="margin-bottom:8px;">
+      <input id="social-link-3" type="text" placeholder="Another link (optional)" autocomplete="off">
+    </div>
 
     <hr class="section-divider">
 
@@ -204,6 +210,10 @@
   </div>
 </div>
 </div>
+
+<footer class="footer">
+  <p>In case of any dispute, the Digitox team's decision will be final.</p>
+</footer>
 
 <script src="/js/app.js"></script>
 <script>
@@ -272,6 +282,12 @@ document.getElementById("signup-form").addEventListener("submit", async (e) => {
   const promoChannel = document.getElementById("promo-channel").value;
   if (!promoChannel) { msg.textContent = "Please select your primary promotion channel."; msg.className = "form-msg error"; return; }
 
+  const socialLinks = [
+    document.getElementById("social-link-1").value.trim(),
+    document.getElementById("social-link-2").value.trim(),
+    document.getElementById("social-link-3").value.trim(),
+  ].filter((l) => l.length > 0);
+
   const phoneCode = document.getElementById("phone-code").value;
   const phoneNum = document.getElementById("phone-number").value.trim();
   const phone = phoneNum ? phoneCode.replace("-CA","") + phoneNum : "";
@@ -300,6 +316,7 @@ document.getElementById("signup-form").addEventListener("submit", async (e) => {
         country,
         currency: document.getElementById("currency").value,
         promotionChannel: promoChannel,
+        socialLinks,
         payoutMethod,
       }),
     });

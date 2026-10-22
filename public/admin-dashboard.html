@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Dashboard — Digitox</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="wrap">
+    <a href="/" class="brand"><span class="dot"></span> Digitox Admin</a>
+    <div class="navlinks">
+      <span style="color:var(--muted); font-size:13px;" id="nav-email"></span>
+      <a href="#" id="change-pw-link">Change password</a>
+      <a href="#" id="logout-link">Log out</a>
+    </div>
+  </div>
+</nav>
+
+<div class="dash-wrap">
+
+  <div class="dash-header">
+    <div>
+      <h2>Affiliate Program Overview</h2>
+      <div class="sub">All-time totals across every affiliate · auto-refreshes every 60 seconds</div>
+    </div>
+    <div class="dash-header-right">
+      <div class="badge" id="live-badge">● Live</div>
+    </div>
+  </div>
+
+  <!-- Approval counts -->
+  <div class="metrics-section">
+    <div class="metrics-label">Approvals</div>
+    <div class="dash-grid dash-grid-4">
+      <div class="dash-card card-orange"><div class="v" id="ov-pending">—</div><div class="l">Pending approval</div></div>
+      <div class="dash-card card-green"><div class="v" id="ov-approved">—</div><div class="l">Approved affiliates</div></div>
+      <div class="dash-card card-pink"><div class="v" id="ov-rejected">—</div><div class="l">Rejected</div></div>
+      <div class="dash-card card-blue"><div class="v" id="ov-total">—</div><div class="l">Total affiliate accounts</div></div>
+    </div>
+  </div>
+
+  <!-- Activity -->
+  <div class="metrics-section">
+    <div class="metrics-label">Activity Driven</div>
+    <div class="dash-grid dash-grid-4">
+      <div class="dash-card card-blue"><div class="v" id="ov-installs">—</div><div class="l">Installs</div></div>
+      <div class="dash-card card-purple"><div class="v" id="ov-sessions-started">—</div><div class="l">Sessions started</div></div>
+      <div class="dash-card card-green"><div class="v" id="ov-sessions-completed">—</div><div class="l">Sessions completed</div></div>
+      <div class="dash-card card-orange"><div class="v" id="ov-failed">—</div><div class="l">Failed sessions</div></div>
+    </div>
+  </div>
+
+  <!-- Money -->
+  <div class="metrics-section">
+    <div class="metrics-label">Payouts</div>
+    <div class="dash-grid dash-grid-4">
+      <div class="dash-card card-pink"><div class="v" id="ov-unlocks">—</div><div class="l">Paid unlocks</div></div>
+      <div class="dash-card card-green"><div class="v" id="ov-earnings">—</div><div class="l">Total earned by affiliates</div></div>
+      <div class="dash-card card-blue"><div class="v" id="ov-paid-out">—</div><div class="l">Already paid out</div></div>
+      <div class="dash-card card-orange"><div class="v" id="ov-pending-payout">—</div><div class="l">You owe (pending payout)</div></div>
+    </div>
+  </div>
+
+  <!-- Pending approvals -->
+  <div class="admin-section">
+    <div class="admin-section-title">Pending Approvals</div>
+    <div class="form-card" style="max-width:none;">
+      <div class="table-scroll">
+        <table class="data-table" id="pending-table">
+          <thead>
+            <tr>
+              <th>Name</th><th>Email</th><th>Phone</th><th>Country</th>
+              <th>Promotion</th><th>Social links</th><th>Signed up</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="pending-tbody"><tr><td colspan="8">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- All affiliates -->
+  <div class="admin-section">
+    <div class="admin-section-title">All Affiliates</div>
+    <div class="form-card" style="max-width:none;">
+      <div class="table-scroll">
+        <table class="data-table" id="all-table">
+          <thead>
+            <tr>
+              <th>Name</th><th>Email</th><th>Status</th>
+              <th class="num">Installs</th><th class="num">Sessions</th><th class="num">Failed</th>
+              <th class="num">Paid unlocks</th><th class="num">Earned</th><th class="num">Paid out</th><th class="num">Pending</th>
+              <th>Last payment</th><th>Details</th>
+            </tr>
+          </thead>
+          <tbody id="all-tbody"><tr><td colspan="12">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Affiliate detail modal -->
+<div class="modal-overlay" id="detail-modal">
+  <div class="modal-box" style="max-width:720px; max-height:88vh; overflow-y:auto; position:relative;">
+    <button class="modal-close" id="detail-close">✕</button>
+    <h3 id="detail-name">Affiliate</h3>
+    <p class="sub" id="detail-email"></p>
+
+    <div class="detail-grid" id="detail-grid"></div>
+
+    <div class="mini-btn-row" style="margin-bottom:18px;">
+      <button class="btn btn-sm" id="detail-approve" style="background:rgba(0,217,166,0.15); color:var(--primary);">Approve</button>
+      <button class="btn btn-sm" id="detail-reject" style="background:rgba(255,77,106,0.12); color:var(--danger);">Reject</button>
+      <button class="btn btn-sm btn-outline" id="detail-pending">Set back to pending</button>
+    </div>
+
+    <hr class="section-divider">
+    <div class="section-title-sm">Payout history</div>
+    <div class="table-scroll" style="margin-bottom:16px;">
+      <table class="data-table" id="detail-payouts-table">
+        <thead><tr><th>Date</th><th class="num">Amount (₹)</th><th>Note</th><th>Proof</th></tr></thead>
+        <tbody id="detail-payouts-tbody"><tr><td colspan="4">No payouts yet.</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="section-title-sm">Record a new payout</div>
+    <form id="payout-form" novalidate>
+      <div class="row2">
+        <div class="field">
+          <label for="payout-amount">Amount paid (₹)</label>
+          <input id="payout-amount" type="number" min="1" step="0.01" required placeholder="1000">
+        </div>
+        <div class="field">
+          <label for="payout-date">Date paid</label>
+          <input id="payout-date" type="date" required>
+        </div>
+      </div>
+      <div class="field">
+        <label for="payout-note">Note (optional)</label>
+        <input id="payout-note" type="text" placeholder="e.g. UPI transfer, ref #1234">
+      </div>
+      <div class="field">
+        <label for="payout-screenshot">Payment screenshot (optional, max ~5MB)</label>
+        <input id="payout-screenshot" type="file" accept="image/*">
+        <img id="payout-screenshot-preview" class="payout-proof-thumb" style="display:none;">
+      </div>
+      <button type="submit" class="btn btn-primary btn-block" id="payout-submit">Record payout</button>
+      <div class="form-msg" id="payout-msg"></div>
+    </form>
+  </div>
+</div>
+
+<!-- Change password modal -->
+<div class="modal-overlay" id="pw-modal">
+  <div class="modal-box" style="position:relative;">
+    <button class="modal-close" id="pw-close">✕</button>
+    <h3>Change password</h3>
+    <p class="sub">Update your admin dashboard password.</p>
+    <form id="pw-form" novalidate>
+      <div class="field">
+        <label for="current-pw">Current password</label>
+        <input id="current-pw" type="password" required autocomplete="current-password">
+      </div>
+      <div class="field">
+        <label for="new-pw">New password</label>
+        <input id="new-pw" type="password" required minlength="8" placeholder="At least 8 characters" autocomplete="new-password">
+      </div>
+      <button type="submit" class="btn btn-primary btn-block" id="pw-submit">Update password</button>
+      <div class="form-msg" id="pw-msg"></div>
+    </form>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script src="/js/admin-dashboard.js"></script>
+</body>
+</html>

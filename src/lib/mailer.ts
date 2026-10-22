@@ -96,6 +96,25 @@ export async function sendPasswordResetEmail(to: string, token: string): Promise
   });
 }
 
+export async function sendAdminPasswordResetEmail(to: string, token: string): Promise<void> {
+  const link = `${siteBase()}/admin-forgot-password.html?token=${token}`;
+  await sendEmail({
+    to,
+    subject: "Reset your Digitox admin dashboard password",
+    html: `
+      <div style="font-family:sans-serif; max-width:520px; margin:0 auto;">
+        <h2 style="color:#00d9a6;">Admin password reset</h2>
+        <p>We received a request to reset the password for the Digitox admin dashboard. Click below to set a new password. This link expires in 1 hour.</p>
+        <p style="text-align:center; margin:28px 0;">
+          <a href="${link}" style="background:#00d9a6; color:#012b1e; padding:12px 28px; border-radius:100px; font-weight:700; text-decoration:none; display:inline-block;">Reset my password</a>
+        </p>
+        <p style="color:#888; font-size:13px;">Or paste this link:<br><a href="${link}">${link}</a></p>
+        <p style="color:#888; font-size:12px;">If you didn't request this, you can safely ignore it. Your password has not changed.</p>
+      </div>
+    `,
+  });
+}
+
 export async function sendHelpRequestEmail(
   from: { name: string; email: string },
   subject: string,

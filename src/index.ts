@@ -1,5 +1,12 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { seedAdminAccounts } from "./lib/referralStore";
+
+// Idempotent -- creates the two admin accounts (digitox007@gmail.com,
+// arpitagrawal131@gmail.com) with a shared default password if they don't
+// exist yet. Safe to run on every boot; never touches an account that
+// already exists, so a password change survives a redeploy/restart.
+seedAdminAccounts();
 
 const rawPort = process.env["PORT"];
 

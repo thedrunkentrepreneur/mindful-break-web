@@ -11,22 +11,22 @@ import path from "node:path";
  * caveat") -- fine for a side project's first real affiliates, not meant to
  * survive serious concurrent write traffic. Revisit with a real DB
  * (@workspace/db is already a workspace dependency) if this ever needs to.
+ *
+ * IMPORTANT KNOWN RISK (flagged, not silently ignored): Render's free tier
+ * runs this on an EPHEMERAL disk -- every redeploy wipes this file. That is
+ * fine for test traffic, but affiliate payout history (PayoutRecord[] below)
+ * is financial record-keeping Arpit has explicitly asked be retained for the
+ * lifetime of the affiliate (5+ years minimum). A flat JSON file on ephemeral
+ * storage CANNOT honestly guarantee that. Treat migrating this store to a
+ * real persistent DB (e.g. Neon Postgres, already discussed) as a pre-launch
+ * blocker once real payouts start being recorded here, not a someday-item.
  */
 
 const DATA_FILE = path.join(process.cwd(), "referral-data.json");
 
-// ---- Commission economics -------------------------------------------------
-// Unlock fee: INR 49. Google Play Billing's small-developer tier takes 15%,
-// leaving INR 41.65 net. The affiliate gets 50% of that net amount. Rounded
-// to 2 decimals -- this is the exact figure Arpit confirmed aligned with.
 export const UNLOCK_FEE_INR = 49;
 export const COMMISSION_PER_UNLOCK_INR = 20.8;
 
-// Round-number payout thresholds per currency (NOT live FX-converted --
-// deliberately simple, fixed round numbers per Arpit's explicit ask).
-// INR 1000 is the anchor; everything else is "about $10" rounded to a clean
-// number in that currency. Any currency not listed here falls back to the
-// USD row.
 export const PAYOUT_THRESHOLDS: Record<string, number> = {
   INR: 1000,
   USD: 10,
@@ -49,6 +49,17 @@ export type PayoutMethod =
   | { type: "upi"; upiId: string }
   | { type: "bank"; accountName: string; accountNumber: string; ifscOrSwift: string; bankName: string };
 
+export type AffiliateStatus = "pending" | "approved" | "rejected";
+
+export interface PayoutRecord {
+  id: string;
+  amountINR: number;
+  paidAt: string;
+  note: string;
+  screenshotDataUrl: string | null;
+  recordedAt: string;
+}
+
 export interface Affiliate {
   id: string;
   name: string;
@@ -57,20 +68,21 @@ export interface Affiliate {
   passwordSalt: string;
   phone: string;
   country: string;
-  currency: string; // ISO code, e.g. "INR", "USD"
+  currency: string;
   promotionChannel: string;
+  socialLinks: string[];
   payoutMethod: PayoutMethod;
   referralCode: string;
   createdAt: string;
-  totalEarningsINR: number; // lifetime, never decreases
-  paidOutINR: number; // lifetime, incremented only by an admin mark-paid action
+  status: AffiliateStatus;
+  totalEarningsINR: number;
+  paidOutINR: number;
   lastSettlementAt: string | null;
-  // Email verification (requires RESEND_API_KEY env var to send the link)
+  payouts: PayoutRecord[];
   emailVerified: boolean;
   emailVerificationToken: string | null;
-  // Password reset (token is a 1-hour-expiry hex string, cleared after use)
   passwordResetToken: string | null;
-  passwordResetExpiry: number | null; // ms timestamp
+  passwordResetExpiry: number | null;
 }
 
 export interface DailyBucket {
@@ -81,15 +93,25 @@ export interface DailyBucket {
   commissionINR: number;
 }
 
+export interface AdminAccount {
+  email: string;
+  passwordHash: string;
+  passwordSalt: string;
+  passwordResetToken: string | null;
+  passwordResetExpiry: number | null;
+}
+
 interface StoreData {
   affiliates: Record<string, Affiliate>;
   codeToAffiliateId: Record<string, string>;
   emailToAffiliateId: Record<string, string>;
-  phoneToAffiliateId: Record<string, string>; // normalized phone -> affiliateId dedup index
+  phoneToAffiliateId: Record<string, string>;
   devices: Record<string, { affiliateId: string; referralCode: string; source: string; attributedAt: string }>;
-  dailyStats: Record<string, Record<string, DailyBucket>>; // affiliateId -> dateISO -> bucket
-  sessions: Record<string, { affiliateId: string; createdAt: string }>; // auth token -> session
+  dailyStats: Record<string, Record<string, DailyBucket>>;
+  sessions: Record<string, { affiliateId: string; createdAt: string }>;
   helpRequests: Array<{ affiliateId: string; subject: string; message: string; createdAt: string }>;
+  adminAccounts: Record<string, AdminAccount>;
+  adminSessions: Record<string, { email: string; createdAt: string }>;
 }
 
 const EMPTY: StoreData = {
@@ -101,6 +123,8 @@ const EMPTY: StoreData = {
   dailyStats: {},
   sessions: {},
   helpRequests: [],
+  adminAccounts: {},
+  adminSessions: {},
 };
 
 function load(): StoreData {
@@ -110,8 +134,7 @@ function load(): StoreData {
       return { ...EMPTY, ...JSON.parse(raw) };
     }
   } catch {
-    // Corrupt or unreadable file -- fail safe to an empty store rather than
-    // crash the whole API over one bad write.
+    // Corrupt or unreadable file -- fail safe to an empty store.
   }
   return structuredClone(EMPTY);
 }
@@ -128,9 +151,14 @@ function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-// ---- Password hashing (stdlib crypto only -- no bcrypt/argon2, both are
-// native modules esbuild externalizes and that would need extra deploy
-// steps we don't have time for today) ----------------------------------
+function normalizeAffiliate(a: Affiliate): Affiliate {
+  return {
+    ...a,
+    status: a.status ?? "approved",
+    socialLinks: a.socialLinks ?? [],
+    payouts: a.payouts ?? [],
+  };
+}
 
 export function hashPassword(password: string): { hash: string; salt: string } {
   const salt = crypto.randomBytes(16).toString("hex");
@@ -150,11 +178,18 @@ function generateReferralCode(data: StoreData, name: string): string {
     const code = `${base}${suffix}`;
     if (!data.codeToAffiliateId[code]) return code;
   }
-  // Astronomically unlikely fallback.
   return `AFF${crypto.randomBytes(6).toString("hex").toUpperCase()}`;
 }
 
-// ---- Affiliate signup / login ------------------------------------------
+function sanitizeSocialLinks(links: unknown): string[] {
+  if (!Array.isArray(links)) return [];
+  return links
+    .filter((l): l is string => typeof l === "string")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0)
+    .slice(0, 3)
+    .map((l) => l.slice(0, 300));
+}
 
 export function createAffiliate(input: {
   name: string;
@@ -164,17 +199,20 @@ export function createAffiliate(input: {
   country: string;
   currency: string;
   promotionChannel?: string;
+  socialLinks?: unknown;
   payoutMethod: PayoutMethod;
 }): { affiliate: Affiliate; verificationToken: string } | { error: string } {
   const email = input.email.trim().toLowerCase();
   if (!email || !input.password || input.password.length < 8) {
     return { error: "Email and a password of at least 8 characters are required." };
   }
+  if (!input.promotionChannel || !input.promotionChannel.trim()) {
+    return { error: "Please select how you'll promote the app." };
+  }
   const data = load();
   if (data.emailToAffiliateId[email]) {
     return { error: "An affiliate account with this email already exists." };
   }
-  // Deduplicate by normalized phone (non-empty phones only)
   const normalizedPhone = (input.phone ?? "").replace(/\s/g, "").trim();
   if (normalizedPhone && data.phoneToAffiliateId?.[normalizedPhone]) {
     return { error: "An affiliate account with this phone number already exists." };
@@ -195,12 +233,15 @@ export function createAffiliate(input: {
     country: input.country?.trim() ?? "",
     currency: (input.currency || "USD").toUpperCase(),
     promotionChannel: input.promotionChannel?.trim() ?? "",
+    socialLinks: sanitizeSocialLinks(input.socialLinks),
     payoutMethod: input.payoutMethod,
     referralCode,
     createdAt: new Date().toISOString(),
+    status: "pending",
     totalEarningsINR: 0,
     paidOutINR: 0,
     lastSettlementAt: null,
+    payouts: [],
     emailVerified: false,
     emailVerificationToken: verificationToken,
     passwordResetToken: null,
@@ -219,7 +260,6 @@ export function createAffiliate(input: {
   return { affiliate, verificationToken };
 }
 
-// Verify email using the token sent at signup.
 export function verifyEmail(token: string): { ok: boolean; error?: string } {
   const data = load();
   const affiliate = Object.values(data.affiliates).find((a) => a.emailVerificationToken === token);
@@ -230,23 +270,20 @@ export function verifyEmail(token: string): { ok: boolean; error?: string } {
   return { ok: true };
 }
 
-// Issue a 1-hour password reset token.
 export function createPasswordResetToken(email: string): { token: string; affiliate: Affiliate } | { error: string } {
   const data = load();
   const id = data.emailToAffiliateId[email.trim().toLowerCase()];
   const affiliate = id ? data.affiliates[id] : undefined;
   if (!affiliate) {
-    // Return a vague success-like message to prevent email enumeration.
     return { error: "not_found" };
   }
   const token = crypto.randomBytes(32).toString("hex");
   affiliate.passwordResetToken = token;
-  affiliate.passwordResetExpiry = Date.now() + 60 * 60 * 1000; // 1 hour
+  affiliate.passwordResetExpiry = Date.now() + 60 * 60 * 1000;
   save(data);
   return { token, affiliate };
 }
 
-// Consume the reset token and set a new password.
 export function resetPassword(token: string, newPassword: string): { ok: boolean; error?: string } {
   if (!newPassword || newPassword.length < 8) return { ok: false, error: "Password must be at least 8 characters." };
   const data = load();
@@ -263,7 +300,6 @@ export function resetPassword(token: string, newPassword: string): { ok: boolean
   return { ok: true };
 }
 
-// Log a help request from an affiliate.
 export function logHelpRequest(affiliateId: string, subject: string, message: string): { ok: boolean } {
   const data = load();
   if (!data.helpRequests) data.helpRequests = [];
@@ -275,19 +311,28 @@ export function logHelpRequest(affiliateId: string, subject: string, message: st
 export function loginAffiliate(
   email: string,
   password: string
-): { token: string; affiliate: Affiliate } | { error: string; reason?: "unverified" } {
+): { token: string; affiliate: Affiliate } | { error: string; reason?: "unverified" | "pending_approval" | "rejected" } {
   const data = load();
   const id = data.emailToAffiliateId[email.trim().toLowerCase()];
-  const affiliate = id ? data.affiliates[id] : undefined;
-  if (!affiliate || !verifyPassword(password, affiliate.passwordHash, affiliate.passwordSalt)) {
+  const rawAffiliate = id ? data.affiliates[id] : undefined;
+  if (!rawAffiliate || !verifyPassword(password, rawAffiliate.passwordHash, rawAffiliate.passwordSalt)) {
     return { error: "Invalid email or password." };
   }
-  // Hard gate: email must be verified before a session token is issued.
-  // The password check above already ran, so this only blocks real account
-  // owners who haven't clicked their verification link yet -- not a way to
-  // probe which emails exist.
+  const affiliate = normalizeAffiliate(rawAffiliate);
   if (!affiliate.emailVerified) {
     return { error: "Please verify your email before logging in. Check your inbox, or resend the link.", reason: "unverified" };
+  }
+  if (affiliate.status === "pending") {
+    return {
+      error: "Your affiliate account is awaiting approval. We'll email you once it's reviewed.",
+      reason: "pending_approval",
+    };
+  }
+  if (affiliate.status === "rejected") {
+    return {
+      error: "This affiliate application was not approved. Contact digitox007@gmail.com with questions.",
+      reason: "rejected",
+    };
   }
   const token = crypto.randomBytes(32).toString("hex");
   data.sessions[token] = { affiliateId: affiliate.id, createdAt: new Date().toISOString() };
@@ -295,10 +340,6 @@ export function loginAffiliate(
   return { token, affiliate };
 }
 
-// Re-issue a verification token for an affiliate who hasn't verified yet
-// (e.g. they lost the original email or it expired/landed in spam).
-// Always returns the same vague shape regardless of whether the email
-// exists, to avoid leaking account existence.
 export function resendVerification(email: string): { affiliate: Affiliate; token: string } | { error: string } {
   const data = load();
   const id = data.emailToAffiliateId[email.trim().toLowerCase()];
@@ -316,16 +357,10 @@ export function affiliateFromToken(token: string | undefined | null): Affiliate 
   const data = load();
   const session = data.sessions[token];
   if (!session) return null;
-  return data.affiliates[session.affiliateId] ?? null;
+  const affiliate = data.affiliates[session.affiliateId];
+  return affiliate ? normalizeAffiliate(affiliate) : null;
 }
 
-// Looks up whether a persistent device ID (Android ID, see the app's
-// lib/referral.ts) already has an attribution on file from ANY prior
-// install -- this is what lets a user who deletes and reinstalls Digitox
-// stay tied to the same affiliate for life, per Arpit's explicit product
-// requirement, without needing to re-click a link or retype a code.
-// Deliberately read-only: does not touch installs/dailyStats counters, this
-// is just recovering a fact that was already recorded once.
 export function lookupAttribution(deviceId: string): { referralCode: string; source: string } | null {
   const data = load();
   const device = data.devices[deviceId];
@@ -339,15 +374,11 @@ export function affiliateByCode(code: string): Affiliate | null {
   return id ? data.affiliates[id] ?? null : null;
 }
 
-// ---- Install / session-event attribution --------------------------------
-
 export function attributeDevice(deviceId: string, referralCode: string, source: string): { ok: boolean; reason?: string } {
   const data = load();
   const affiliateId = data.codeToAffiliateId[referralCode];
   if (!affiliateId) return { ok: false, reason: "unknown_referral_code" };
 
-  // First attribution for a device wins; a device re-reporting the same
-  // (or a different) code later doesn't re-count as a fresh install.
   if (data.devices[deviceId]) return { ok: true };
 
   data.devices[deviceId] = { affiliateId, referralCode, source, attributedAt: new Date().toISOString() };
@@ -379,7 +410,7 @@ export function recordSessionEvent(
 ): { ok: boolean } {
   const data = load();
   const device = data.devices[deviceId];
-  if (!device) return { ok: true }; // unattributed device -- nothing to credit, not an error
+  if (!device) return { ok: true };
 
   const bucket = ensureBucket(data, device.affiliateId, todayISO());
   if (outcome === "started") bucket.sessionsStarted += 1;
@@ -396,13 +427,44 @@ export function recordSessionEvent(
   return { ok: true };
 }
 
-// ---- Dashboard read model -------------------------------------------------
+interface AffiliateStats {
+  installs: number;
+  sessionsStarted: number;
+  sessionsCompleted: number;
+  failedSessions: number;
+  paidUnlocks: number;
+  revenueByDay: Array<{
+    date: string;
+    installs: number;
+    sessionsStarted: number;
+    sessionsCompleted: number;
+    paidUnlocks: number;
+    commissionINR: number;
+  }>;
+}
 
-export function dashboardFor(affiliateId: string, days = 180) {
-  const data = load();
-  const affiliate = data.affiliates[affiliateId];
-  if (!affiliate) return null;
-
+// Extracted out of dashboardFor() so the admin dashboard's per-affiliate
+// rows use the exact same (bug-fixed) math as the affiliate's own view.
+//
+// BUG FIX (2026-10-22, reported by Arpit: "it recorded a failed session
+// even while the session was running and not closed"):
+//
+// The old formula was `sessionsStarted - sessionsCompleted` summed across
+// ALL days, which had two real bugs:
+//   1. A session started today, still running, with no terminal event sent
+//      yet, was immediately counted as "failed" the instant it started --
+//      before it had any chance to resolve. This is exactly the symptom
+//      Arpit saw.
+//   2. A "paid_unlock" session (the best outcome -- user paid to unlock
+//      early) never fires a "completed" event, only "paid_unlock". The old
+//      formula only ever subtracted sessionsCompleted, so every paid
+//      unlock was ALSO being miscounted as a failure.
+//
+// Fix: (a) skip the most recent 2 calendar days entirely when tallying
+// failures -- a grace window safely longer than any realistic focus-session
+// duration, so an in-progress session is never presumed failed; (b)
+// subtract BOTH sessionsCompleted and paidUnlocks from sessionsStarted.
+function computeAffiliateStats(data: StoreData, affiliateId: string, days: number): AffiliateStats {
   const buckets = data.dailyStats[affiliateId] ?? {};
   const dates: string[] = [];
   const today = new Date();
@@ -430,47 +492,67 @@ export function dashboardFor(affiliateId: string, days = 180) {
     }),
     { installs: 0, sessionsStarted: 0, sessionsCompleted: 0, paidUnlocks: 0 }
   );
-  const failedSessions = Math.max(0, totals.sessionsStarted - totals.sessionsCompleted);
+
+  const graceCutoff = new Date(today);
+  graceCutoff.setDate(graceCutoff.getDate() - 2);
+  const graceCutoffISO = graceCutoff.toISOString().slice(0, 10);
+
+  let failedSessions = 0;
+  for (const d of revenueByDay) {
+    if (d.date > graceCutoffISO) continue;
+    failedSessions += Math.max(0, d.sessionsStarted - d.sessionsCompleted - d.paidUnlocks);
+  }
+
+  return {
+    installs: totals.installs,
+    sessionsStarted: totals.sessionsStarted,
+    sessionsCompleted: totals.sessionsCompleted,
+    failedSessions,
+    paidUnlocks: totals.paidUnlocks,
+    revenueByDay,
+  };
+}
+
+export function dashboardFor(affiliateId: string, days = 180) {
+  const data = load();
+  const rawAffiliate = data.affiliates[affiliateId];
+  if (!rawAffiliate) return null;
+  const affiliate = normalizeAffiliate(rawAffiliate);
+
+  const stats = computeAffiliateStats(data, affiliateId, days);
 
   const pendingINR = parseFloat((affiliate.totalEarningsINR - affiliate.paidOutINR).toFixed(2));
   const currencyKey = affiliate.currency?.toUpperCase() ?? "USD";
   const displayCurrency = PAYOUT_THRESHOLDS[currencyKey] ? currencyKey : "USD";
   const threshold = payoutThresholdFor(currencyKey);
 
-  // Next settlement date: the 1st of next month -- payouts are monthly and
-  // manual (Arpit pays out himself via UPI), this is just an informational
-  // date shown on the dashboard, not something that triggers an automatic
-  // transfer.
-  // Built with Date.UTC rather than the local-timezone Date constructor --
-  // the latter shifts the displayed date backward by a day whenever the
-  // server's local timezone is ahead of UTC (confirmed bug: IST showed
-  // Oct 31 for a "Nov 1" settlement date after the UTC round-trip).
   const now = new Date();
   const nextSettlement = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+
+  const lastPayoutRecord = affiliate.payouts.length ? affiliate.payouts[affiliate.payouts.length - 1] : null;
 
   return {
     affiliateName: affiliate.name,
     referralCode: affiliate.referralCode,
     currency: affiliate.currency,
-    installs: totals.installs,
-    sessionsStarted: totals.sessionsStarted,
-    sessionsCompleted: totals.sessionsCompleted,
-    failedSessions,
-    paidUnlocks: totals.paidUnlocks,
+    installs: stats.installs,
+    sessionsStarted: stats.sessionsStarted,
+    sessionsCompleted: stats.sessionsCompleted,
+    failedSessions: stats.failedSessions,
+    paidUnlocks: stats.paidUnlocks,
     totalEarningsINR: affiliate.totalEarningsINR,
     paidOutINR: affiliate.paidOutINR,
     pendingINR,
     payoutThresholdDisplay: `${threshold} ${displayCurrency}`,
-    // The real eligibility test always runs off the INR ledger anchor --
-    // every currency row in PAYOUT_THRESHOLDS is just a round-number
-    // *display* of the same ~$10 bar, not a separately FX-converted one.
     eligibleForPayout: pendingINR >= PAYOUT_THRESHOLDS["INR"],
     nextSettlementDate: nextSettlement.toISOString().slice(0, 10),
-    revenueByDay,
+    revenueByDay: stats.revenueByDay,
+    lastSettlementAt: affiliate.lastSettlementAt,
+    lastPayout: lastPayoutRecord
+      ? { amountINR: lastPayoutRecord.amountINR, paidAt: lastPayoutRecord.paidAt, note: lastPayoutRecord.note }
+      : null,
   };
 }
-
-// ---- Admin: manual payout marking -----------------------------------------
 
 export function markPaidOut(affiliateId: string, amountINR: number): { ok: boolean; reason?: string } {
   const data = load();
@@ -482,9 +564,6 @@ export function markPaidOut(affiliateId: string, amountINR: number): { ok: boole
   return { ok: true };
 }
 
-// Admin-only: permanently remove an affiliate (and all their derived index
-// entries). Used to clean up test/duplicate accounts -- there's no self-serve
-// "delete my account" path, this is deliberately admin-gated only.
 export function deleteAffiliate(affiliateId: string): { ok: boolean; reason?: string } {
   const data = load();
   const affiliate = data.affiliates[affiliateId];
@@ -498,10 +577,245 @@ export function deleteAffiliate(affiliateId: string): { ok: boolean; reason?: st
   for (const [token, session] of Object.entries(data.sessions)) {
     if (session.affiliateId === affiliateId) delete data.sessions[token];
   }
-  // Deliberately NOT touching data.devices: those rows record which affiliate
-  // an install was attributed to at the time, a historical fact independent
-  // of whether the affiliate account itself still exists.
 
+  save(data);
+  return { ok: true };
+}
+
+// =====================================================================
+// ---- Admin accounts (Arpit's own login, separate from affiliates) ----
+// =====================================================================
+
+export const ADMIN_EMAILS = ["digitox007@gmail.com", "arpitagrawal131@gmail.com"];
+const DEFAULT_ADMIN_PASSWORD = "Digitox@2026!";
+
+export function seedAdminAccounts(): void {
+  const data = load();
+  let changed = false;
+  for (const email of ADMIN_EMAILS) {
+    if (!data.adminAccounts[email]) {
+      const { hash, salt } = hashPassword(DEFAULT_ADMIN_PASSWORD);
+      data.adminAccounts[email] = {
+        email,
+        passwordHash: hash,
+        passwordSalt: salt,
+        passwordResetToken: null,
+        passwordResetExpiry: null,
+      };
+      changed = true;
+    }
+  }
+  if (changed) save(data);
+}
+
+export function loginAdmin(email: string, password: string): { token: string; email: string } | { error: string } {
+  const data = load();
+  const account = data.adminAccounts[email.trim().toLowerCase()];
+  if (!account || !verifyPassword(password, account.passwordHash, account.passwordSalt)) {
+    return { error: "Invalid email or password." };
+  }
+  const token = crypto.randomBytes(32).toString("hex");
+  data.adminSessions[token] = { email: account.email, createdAt: new Date().toISOString() };
+  save(data);
+  return { token, email: account.email };
+}
+
+export function adminFromToken(token: string | undefined | null): { email: string } | null {
+  if (!token) return null;
+  const data = load();
+  const session = data.adminSessions[token];
+  if (!session) return null;
+  return data.adminAccounts[session.email] ? { email: session.email } : null;
+}
+
+export function changeAdminPassword(
+  email: string,
+  currentPassword: string,
+  newPassword: string
+): { ok: boolean; error?: string } {
+  if (!newPassword || newPassword.length < 8) return { ok: false, error: "Password must be at least 8 characters." };
+  const data = load();
+  const account = data.adminAccounts[email.trim().toLowerCase()];
+  if (!account || !verifyPassword(currentPassword, account.passwordHash, account.passwordSalt)) {
+    return { ok: false, error: "Current password is incorrect." };
+  }
+  const { hash, salt } = hashPassword(newPassword);
+  account.passwordHash = hash;
+  account.passwordSalt = salt;
+  save(data);
+  return { ok: true };
+}
+
+export function createAdminPasswordResetToken(email: string): { token: string } | { error: string } {
+  const data = load();
+  const account = data.adminAccounts[email.trim().toLowerCase()];
+  if (!account) return { error: "not_found" };
+  const token = crypto.randomBytes(32).toString("hex");
+  account.passwordResetToken = token;
+  account.passwordResetExpiry = Date.now() + 60 * 60 * 1000;
+  save(data);
+  return { token };
+}
+
+export function resetAdminPassword(token: string, newPassword: string): { ok: boolean; error?: string } {
+  if (!newPassword || newPassword.length < 8) return { ok: false, error: "Password must be at least 8 characters." };
+  const data = load();
+  const account = Object.values(data.adminAccounts).find(
+    (a) => a.passwordResetToken === token && a.passwordResetExpiry && a.passwordResetExpiry > Date.now()
+  );
+  if (!account) return { ok: false, error: "This reset link has expired or is invalid. Please request a new one." };
+  const { hash, salt } = hashPassword(newPassword);
+  account.passwordHash = hash;
+  account.passwordSalt = salt;
+  account.passwordResetToken = null;
+  account.passwordResetExpiry = null;
+  save(data);
+  return { ok: true };
+}
+
+// =====================================================================
+// ---- Admin data views: approvals, overview, per-affiliate detail -----
+// =====================================================================
+
+export interface AdminAffiliateRow {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  country: string;
+  currency: string;
+  status: AffiliateStatus;
+  referralCode: string;
+  promotionChannel: string;
+  socialLinks: string[];
+  payoutMethod: PayoutMethod;
+  createdAt: string;
+  emailVerified: boolean;
+  installs: number;
+  sessionsStarted: number;
+  sessionsCompleted: number;
+  failedSessions: number;
+  paidUnlocks: number;
+  totalEarningsINR: number;
+  paidOutINR: number;
+  pendingINR: number;
+  lastSettlementAt: string | null;
+  lastPayout: { amountINR: number; paidAt: string; note: string } | null;
+}
+
+function toAdminRow(data: StoreData, affiliateId: string): AdminAffiliateRow {
+  const affiliate = normalizeAffiliate(data.affiliates[affiliateId]);
+  const stats = computeAffiliateStats(data, affiliateId, 36500);
+  const pendingINR = parseFloat((affiliate.totalEarningsINR - affiliate.paidOutINR).toFixed(2));
+  const lastPayoutRecord = affiliate.payouts.length ? affiliate.payouts[affiliate.payouts.length - 1] : null;
+  return {
+    id: affiliate.id,
+    name: affiliate.name,
+    email: affiliate.email,
+    phone: affiliate.phone,
+    country: affiliate.country,
+    currency: affiliate.currency,
+    status: affiliate.status,
+    referralCode: affiliate.referralCode,
+    promotionChannel: affiliate.promotionChannel,
+    socialLinks: affiliate.socialLinks,
+    payoutMethod: affiliate.payoutMethod,
+    createdAt: affiliate.createdAt,
+    emailVerified: affiliate.emailVerified,
+    installs: stats.installs,
+    sessionsStarted: stats.sessionsStarted,
+    sessionsCompleted: stats.sessionsCompleted,
+    failedSessions: stats.failedSessions,
+    paidUnlocks: stats.paidUnlocks,
+    totalEarningsINR: affiliate.totalEarningsINR,
+    paidOutINR: affiliate.paidOutINR,
+    pendingINR,
+    lastSettlementAt: affiliate.lastSettlementAt,
+    lastPayout: lastPayoutRecord
+      ? { amountINR: lastPayoutRecord.amountINR, paidAt: lastPayoutRecord.paidAt, note: lastPayoutRecord.note }
+      : null,
+  };
+}
+
+export function listAffiliatesForAdmin(): AdminAffiliateRow[] {
+  const data = load();
+  return Object.keys(data.affiliates)
+    .map((id) => toAdminRow(data, id))
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+}
+
+export function affiliateDetailForAdmin(affiliateId: string): (AdminAffiliateRow & { payouts: PayoutRecord[] }) | null {
+  const data = load();
+  if (!data.affiliates[affiliateId]) return null;
+  const row = toAdminRow(data, affiliateId);
+  const affiliate = normalizeAffiliate(data.affiliates[affiliateId]);
+  return { ...row, payouts: affiliate.payouts };
+}
+
+export function adminOverview() {
+  const rows = listAffiliatesForAdmin();
+  return rows.reduce(
+    (acc, r) => ({
+      totalAffiliates: acc.totalAffiliates + 1,
+      pendingApprovals: acc.pendingApprovals + (r.status === "pending" ? 1 : 0),
+      approved: acc.approved + (r.status === "approved" ? 1 : 0),
+      rejected: acc.rejected + (r.status === "rejected" ? 1 : 0),
+      installs: acc.installs + r.installs,
+      sessionsStarted: acc.sessionsStarted + r.sessionsStarted,
+      sessionsCompleted: acc.sessionsCompleted + r.sessionsCompleted,
+      failedSessions: acc.failedSessions + r.failedSessions,
+      paidUnlocks: acc.paidUnlocks + r.paidUnlocks,
+      totalEarningsINR: parseFloat((acc.totalEarningsINR + r.totalEarningsINR).toFixed(2)),
+      paidOutINR: parseFloat((acc.paidOutINR + r.paidOutINR).toFixed(2)),
+      pendingINR: parseFloat((acc.pendingINR + r.pendingINR).toFixed(2)),
+    }),
+    {
+      totalAffiliates: 0,
+      pendingApprovals: 0,
+      approved: 0,
+      rejected: 0,
+      installs: 0,
+      sessionsStarted: 0,
+      sessionsCompleted: 0,
+      failedSessions: 0,
+      paidUnlocks: 0,
+      totalEarningsINR: 0,
+      paidOutINR: 0,
+      pendingINR: 0,
+    }
+  );
+}
+
+export function setAffiliateStatus(affiliateId: string, status: AffiliateStatus): { ok: boolean; reason?: string } {
+  const data = load();
+  const affiliate = data.affiliates[affiliateId];
+  if (!affiliate) return { ok: false, reason: "not_found" };
+  affiliate.status = status;
+  save(data);
+  return { ok: true };
+}
+
+export function recordPayout(
+  affiliateId: string,
+  input: { amountINR: number; paidAt: string; note: string; screenshotDataUrl: string | null }
+): { ok: boolean; reason?: string } {
+  const data = load();
+  const affiliate = data.affiliates[affiliateId];
+  if (!affiliate) return { ok: false, reason: "not_found" };
+  if (!input.amountINR || input.amountINR <= 0) return { ok: false, reason: "invalid_amount" };
+
+  if (!affiliate.payouts) affiliate.payouts = [];
+  const record: PayoutRecord = {
+    id: crypto.randomUUID(),
+    amountINR: input.amountINR,
+    paidAt: input.paidAt || new Date().toISOString().slice(0, 10),
+    note: input.note ?? "",
+    screenshotDataUrl: input.screenshotDataUrl ?? null,
+    recordedAt: new Date().toISOString(),
+  };
+  affiliate.payouts.push(record);
+  affiliate.paidOutINR = parseFloat((affiliate.paidOutINR + input.amountINR).toFixed(2));
+  affiliate.lastSettlementAt = record.recordedAt;
   save(data);
   return { ok: true };
 }

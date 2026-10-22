@@ -45,12 +45,14 @@ function isValidPayoutMethod(m: unknown): m is PayoutMethod {
   return false;
 }
 
-// Self-serve affiliate signup -- no manual approval gate, the account and
-// referral code/link are usable immediately. Keeps the signup funnel
-// one-step, which matters more for a brand-new program than fraud control
-// at this stage.
+// Self-serve affiliate signup. Every account now starts in "pending"
+// status (see createAffiliate) -- in addition to the pre-existing email
+// verification gate, Arpit must approve the account from the admin
+// dashboard before login works. Keeps the signup funnel itself one-step
+// (no manual review blocking the form submission), while still giving
+// Arpit a real approval checkpoint before an affiliate can start earning.
 router.post("/affiliate/signup", (req, res) => {
-  const { name, email, password, phone, country, currency, promotionChannel, payoutMethod } = req.body as {
+  const { name, email, password, phone, country, currency, promotionChannel, socialLinks, payoutMethod } = req.body as {
     name?: string;
     email?: string;
     password?: string;
@@ -58,6 +60,7 @@ router.post("/affiliate/signup", (req, res) => {
     country?: string;
     currency?: string;
     promotionChannel?: string;
+    socialLinks?: unknown;
     payoutMethod?: unknown;
   };
 
@@ -78,6 +81,7 @@ router.post("/affiliate/signup", (req, res) => {
     country: country ?? "",
     currency: currency ?? "USD",
     promotionChannel: promotionChannel ?? "",
+    socialLinks,
     payoutMethod,
   });
   if ("error" in result) return res.status(400).json({ error: result.error });
@@ -86,12 +90,13 @@ router.post("/affiliate/signup", (req, res) => {
   sendVerificationEmail(result.affiliate.email, result.affiliate.name, result.verificationToken).catch(() => {});
 
   // No auto-login anymore: email verification is now a hard gate on login,
-  // and a freshly created account is never verified yet, so logging in here
-  // would always fail. Tell the user to check their inbox instead.
+  // and a freshly created account is never verified yet (and also starts
+  // "pending" approval), so logging in here would always fail. Tell the
+  // user to check their inbox instead.
   return res.json({
     ok: true,
     requiresVerification: true,
-    message: "Account created. Check your email to verify your address before logging in.",
+    message: "Account created. Check your email to verify your address. Your account will also need Digitox's approval before you can log in -- we'll email you once it's reviewed.",
   });
 });
 

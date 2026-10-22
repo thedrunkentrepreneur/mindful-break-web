@@ -43,8 +43,12 @@ app.use(
   }),
 );
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Raised from Express's default ~100kb limit: the admin payout-recording
+// flow (item h) accepts a base64-encoded payment-screenshot data URL directly
+// in the JSON body (no multer/file-upload dependency needed) -- a phone
+// screenshot easily exceeds 100kb once base64-encoded.
+app.use(express.json({ limit: "8mb" }));
+app.use(express.urlencoded({ extended: true, limit: "8mb" }));
 
 app.use(express.static(PUBLIC_DIR));
 

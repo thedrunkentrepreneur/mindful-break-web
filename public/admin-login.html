@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Login — Digitox</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="wrap">
+    <a href="/" class="brand"><span class="dot"></span> Mindful Break Affiliates</a>
+    <div class="navlinks"><a href="/login.html">Affiliate login</a></div>
+  </div>
+</nav>
+
+<div class="form-page">
+<div class="form-card">
+  <h2>Digitox Admin</h2>
+  <div class="form-sub">Internal dashboard. Restricted to Digitox management.</div>
+
+  <form id="admin-login-form" novalidate>
+    <div class="field">
+      <label for="email">Email</label>
+      <input id="email" type="email" required placeholder="you@example.com" autocomplete="email">
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input id="password" type="password" required placeholder="Your password" autocomplete="current-password">
+    </div>
+    <a href="/admin-forgot-password.html" class="forgot-link">Forgot password?</a>
+    <button type="submit" class="btn btn-primary btn-block" id="submit-btn">Log in</button>
+    <div class="form-msg" id="form-msg"></div>
+  </form>
+</div>
+</div>
+
+<footer class="footer">
+  <p>In case of any dispute, the Digitox team's decision will be final.</p>
+</footer>
+
+<script src="/js/app.js"></script>
+<script>
+document.getElementById("admin-login-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById("form-msg");
+  const btn = document.getElementById("submit-btn");
+  msg.textContent = "";
+  msg.className = "form-msg";
+  btn.disabled = true;
+  btn.textContent = "Logging in…";
+  try {
+    const data = await adminApiFetch("/admin/login", {
+      method: "POST",
+      body: JSON.stringify({
+        email: document.getElementById("email").value.trim(),
+        password: document.getElementById("password").value,
+      }),
+    });
+    setAdminAuthToken(data.token);
+    localStorage.setItem("mb_admin_email", data.email || "");
+    window.location.href = "/admin-dashboard.html";
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = "form-msg error";
+    btn.disabled = false;
+    btn.textContent = "Log in";
+  }
+});
+</script>
+</body>
+</html>
