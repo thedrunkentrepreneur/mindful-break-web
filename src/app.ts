@@ -50,7 +50,10 @@ app.use(cors());
 app.use(express.json({ limit: "8mb" }));
 app.use(express.urlencoded({ extended: true, limit: "8mb" }));
 
-app.use(express.static(PUBLIC_DIR));
+// extensions: ["html"] lets clean URLs like /terms and /privacy resolve
+// to terms.html/privacy.html -- the in-app Terms screen (TermsModal.tsx)
+// already tells users to visit "digitox.club/terms" without the extension.
+app.use(express.static(PUBLIC_DIR, { extensions: ["html"] }));
 
 app.use("/api", router);
 app.use("/api/privacy", privacyRouter);

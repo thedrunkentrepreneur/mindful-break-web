@@ -3,9 +3,10 @@
  *
  * Requires one env var:  RESEND_API_KEY  (free tier at resend.com supports
  * 100 emails/day -- enough for verification and password resets at early
- * scale). Also needs RESEND_FROM_EMAIL (defaults to "Mindful Break Affiliates
- * <noreply@mindfulbreak.app>" if not set, but must match a verified Resend
- * domain).
+ * scale). Also needs RESEND_FROM_EMAIL (defaults to "Digitox
+ * <noreply@digitox.club>" if not set, but digitox.club must first be
+ * added + verified as a sending domain in the Resend dashboard, or every
+ * send will be rejected).
  *
  * If RESEND_API_KEY is absent the functions return { ok: false,
  * skipped: true } without throwing -- features that depend on email degrade
@@ -19,11 +20,11 @@ function apiKey(): string | null {
 }
 
 function fromAddress(): string {
-  return process.env["RESEND_FROM_EMAIL"] ?? "Mindful Break Affiliates <noreply@mindfulbreak.app>";
+  return process.env["RESEND_FROM_EMAIL"] ?? "Digitox <noreply@digitox.club>";
 }
 
 function siteBase(): string {
-  return process.env["SITE_BASE_URL"] ?? "https://mindful-break-web.onrender.com";
+  return process.env["SITE_BASE_URL"] ?? "https://digitox.club";
 }
 
 export async function sendEmail(opts: {
