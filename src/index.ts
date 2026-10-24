@@ -1,6 +1,13 @@
 import app from "./app";
 import { logger } from "./lib/logger";
-import { seedAdminAccounts } from "./lib/referralStore";
+import { seedAdminAccounts, hydrateLocalFileFromDb } from "./lib/referralStore";
+
+// Restore affiliate/payout data from Postgres BEFORE anything else runs,
+// if the local file was just wiped by a fresh Render redeploy (no-op if
+// DATABASE_URL isn't set, or if the local file already exists). Must
+// complete before seedAdminAccounts()/app.listen() so no request can ever
+// observe a half-restored or empty store.
+await hydrateLocalFileFromDb();
 
 // Idempotent -- creates the two admin accounts (digitox007@gmail.com,
 // arpitagrawal131@gmail.com) with a shared default password if they don't

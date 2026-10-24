@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { loadSnapshotFromDb, persistSnapshotToDb } from "./db";
 
 /**
  * Referral / affiliate ledger storage.
@@ -144,6 +145,30 @@ function save(data: StoreData) {
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
   } catch {
     // Best-effort, same as detox-stats.json.
+  }
+  // Fire-and-forget mirror to Postgres (no-op if DATABASE_URL unset) so
+  // affiliate/payout data survives Render's ephemeral-disk redeploys --
+  // see db.ts for details. Never awaited: must not slow down or risk
+  // failing any of this file's existing synchronous call sites.
+  persistSnapshotToDb(data);
+}
+
+/**
+ * Called once at server boot, before the app starts accepting traffic (see
+ * index.ts). If the local JSON file is missing -- the signature of a fresh
+ * Render redeploy having just wiped the ephemeral disk -- restore it from
+ * the last snapshot mirrored to Postgres. If the file already exists (e.g.
+ * local dev, or a non-wiped disk), this intentionally does nothing: the
+ * local file is treated as the freshest source of truth whenever present.
+ */
+export async function hydrateLocalFileFromDb(): Promise<void> {
+  if (fs.existsSync(DATA_FILE)) return;
+  const snapshot = await loadSnapshotFromDb();
+  if (!snapshot) return;
+  try {
+    fs.writeFileSync(DATA_FILE, JSON.stringify(snapshot, null, 2));
+  } catch {
+    // Best-effort; if this fails, load() below still falls back to EMPTY.
   }
 }
 
